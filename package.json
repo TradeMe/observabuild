@@ -1,0 +1,40 @@
+{
+  "name": "@trademe/observabuild",
+  "version": "1.0.0",
+  "description": "TradeMe observable build",
+  "main": "./lib/index.js",
+  "typings": "./lib/index.d.ts",
+  "author": "Trade Me",
+  "license": "MIT",
+  "scripts": {
+    "prepublish": "npm run build",
+    "build": "npm run clean && npm run compile",
+    "clean": "rimraf ./lib",
+    "compile": "tsc",
+    "example": "node ./test/example.js",
+    "example:fail": "npm run example -- --fail",
+    "test:delay": "node ./test/delay.js",
+    "test:error": "node ./test/throw.js"
+  },
+  "dependencies": {
+    "archiver": "^2.0.3",
+    "chalk": "^2.1.0",
+    "dedent": "^0.7.0",
+    "log-symbols": "^2.0.0",
+    "mkdirp": "^0.5.1",
+    "ncp": "^2.0.0",
+    "nsp": "^2.7.0",
+    "rimraf": "^2.6.1",
+    "rxjs": "^5.4.3",
+    "tree-kill": "^1.1.0",
+    "tslib": "^1.7.1"
+  },
+  "devDependencies": {
+    "@types/node": "^8.0.24",
+    "typescript": "2.4.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TradeMe/observabuild.git"
+  }
+}

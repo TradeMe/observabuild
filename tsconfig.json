@@ -1,0 +1,22 @@
+{
+    "compilerOptions": {
+      "declaration": true,
+      "emitDecoratorMetadata": true,
+      "experimentalDecorators": true,
+      "importHelpers": true,
+      "inlineSources": true,
+      "lib": ["dom", "es6"],
+      "module": "commonjs",
+      "moduleResolution": "node",
+      "noEmitHelpers": true,
+      "outDir": "./lib",
+      "rootDir": "./src",
+      "inlineSourceMap": true,
+      "strict": true,
+      "stripInternal": true,
+      "target": "es2015"
+    },
+    "files": [
+      "src/index.ts"
+    ]
+}
