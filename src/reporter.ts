@@ -3,6 +3,8 @@ import { Subscription } from 'rxjs/Subscription';
 
 import { ERROR_EXIT_CODE, TaskArtifact, TaskData, TaskDataLogLevel, TaskDone, TaskError, TaskEvent, TaskStart } from './task-event';
 
+export type LogFilterFunction = (message: string, reporter: string, logLevel: TaskDataLogLevel) => boolean | string;
+
 export interface IReporter {
     subscribe(tasks: Observable<TaskEvent>, complete: () => void): void;
     unsubscribe(): void;
@@ -17,6 +19,9 @@ export abstract class Reporter implements IReporter {
     private _exitCode: number;
     private _notifyComplete: (err?: any) => void;
     
+    constructor(private _logFilter?: Array<LogFilterFunction>) {
+    }
+
     subscribe(tasks: Observable<TaskEvent>, complete: (err?: any) => void): void {
         this.logStart();
         this._notifyComplete = complete;
@@ -77,4 +82,22 @@ export abstract class Reporter implements IReporter {
     protected abstract logUnhandledError(error: any): void;
     protected abstract logArtifact(event: TaskArtifact): void;
     protected abstract logComplete(runTimeMs: number): void;
+    
+    // return false to filter out message, or a string to override output
+    protected filterMessage(message: string, reporter: string, logLevel: TaskDataLogLevel): string | null {
+        if (!this._logFilter || !this._logFilter.length)
+            return message;
+        let filteredMessage: string | null = message;
+        this._logFilter.forEach(filterFunc => {
+            if (filteredMessage === null)
+                return;
+            let filterResult = filterFunc(filteredMessage, reporter, logLevel);
+            if (!filterResult) {
+                filteredMessage = null;
+            } else if (typeof filterResult === 'string') {
+                filteredMessage = filterResult;
+            }
+        });
+        return filteredMessage;
+    }
 }

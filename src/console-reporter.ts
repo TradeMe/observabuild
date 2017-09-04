@@ -2,33 +2,42 @@ const chalk = require('chalk');
 const logSymbols = require('log-symbols');
 
 import { ITask } from './task';
-import { Reporter } from './reporter';
+import { LogFilterFunction, Reporter } from './reporter';
 import { TaskArtifact, TaskData, TaskDataLogLevel, TaskDone, TaskError, TaskStart } from './task-event';
 
 export class ConsoleReporter extends Reporter {
+    constructor(logFilter?: Array<LogFilterFunction>) {
+        super(logFilter);
+    }
+
     logStart(): void {
         console.log('Build started');
     }
 
     logData(event: TaskData): void {
+        let filteredMessage = this.logFilter(event.data || '', event.logLevel);
+        if (!filteredMessage)
+            return;
         // trim trailing whitespace
-        let message = (event.data || '').replace(/[\s\r\n]+$/, '');
+        let message = (filteredMessage || '').replace(/[\s\r\n]+$/, '');
+        let prefix = this.addPrefix(event.task);
         switch (event.logLevel)
         {
             case TaskDataLogLevel.info:
-                console.log(this.addPrefix(event.task), logSymbols.info, message);
+                console.log(prefix, logSymbols.info, message);
                 break;
             case TaskDataLogLevel.warn:
-                console.warn(this.addPrefix(event.task), logSymbols.warning, chalk.yellow(message));
+                console.warn(prefix, logSymbols.warning, chalk.yellow(message));
                 break;
             case TaskDataLogLevel.error:
-                console.error(this.addPrefix(event.task), logSymbols.error, chalk.red(message));
+                console.error(prefix, logSymbols.error, chalk.red(message));
                 if (event.error)
-                    console.error(this.addPrefix(event.task), logSymbols.error, chalk.red(event.error));
+                    console.error(prefix, logSymbols.error, chalk.red(event.error));
                 break;
             default:
-                console.log(this.addPrefix(event.task, message));
-        }
+                // add prefix to each line of output
+                message.split('\n').map(line => console.log(prefix, line));
+            }
     }
 
     logTaskStart(event: TaskStart): void {
@@ -44,8 +53,9 @@ export class ConsoleReporter extends Reporter {
         if (event.task.statusMessage && event.task.statusMessage.success) {
             console.log(this.addPrefix(event.task), logSymbols.success, chalk.green(event.task.statusMessage.success));
         } else if (event.task.name) {
-            console.log(this.addPrefix(event.task), logSymbols.success, chalk.green(`${event.task.name} completed`));
-            // console.log(this.addPrefix(event.task), logSymbols.success, chalk.green(`${event.task.name} completed in ${event.runTimeMs}ms`));
+            // report run time if run was longer than 10 seconds
+            let runTime = event.runTimeMs > 10000 ? ` in ${event.runTimeMs}ms` : '';
+            console.log(this.addPrefix(event.task), logSymbols.success, chalk.green(`${event.task.name} completed${runTime}`));
         }
     }
 
@@ -66,7 +76,7 @@ export class ConsoleReporter extends Reporter {
     }
 
     logArtifact(event: TaskArtifact): void {
-        console.log(logSymbols.info, chalk.yellow(this.addPrefix(event.task, `${event.task.name} publish artifact [${event.path}]`)));
+        console.log(this.addPrefix(event.task), logSymbols.info, chalk.yellow(`Publish artifact [${event.path}]`));
     }
 
     logComplete(runTimeMs: number): void {
@@ -79,5 +89,9 @@ export class ConsoleReporter extends Reporter {
             return message || '';
         let prefix = `${task.prefix}:      `.substring(0, 7);
         return `${chalk.gray(prefix)}${message || ''}`;
+    }
+
+    private logFilter(message: string, logLevel: TaskDataLogLevel): string | null {
+        return super.filterMessage(message, 'console', logLevel);
     }
 }

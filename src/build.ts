@@ -6,7 +6,8 @@ import { ConsoleReporter } from './console-reporter';
 import { DoTask } from './do-task';
 import { RunTask } from './run-task';
 import { IDoTask, IRunTask } from './task';
-import { IReporter } from './reporter';
+import { LogFilterFunction, IReporter } from './reporter';
+import { TaskDataLogLevel } from './task-event';
 import { TaskList } from './task-list';
 import { isRunningInTeamCity, TeamCityReporter } from './teamcity-reporter';
 
@@ -16,9 +17,15 @@ const CMD_EXT = IS_WINDOWS ? '.cmd' : '';
 const DEFAULT_BUILD_TIMEOUT_SECONDS = 60 * 60; // halt build after 1 hour ...
 
 export interface IBuildOptions {
-    timeoutSeconds?: number; // halt the build if it runs longer than this. set to 0 to disable
-    teamcity?: boolean; // override automatic teamcity reporter detection
-    errorTimeoutMs?: number; // time to wait after a stderr before stopping the build. allows multiple errors to be output before fail. set to 0 to disable
+    // halt the build if it runs longer than this. set to 0 to disable
+    timeoutSeconds?: number;
+    // override automatic teamcity reporter detection
+    teamcity?: boolean;
+    // time to wait after a stderr before stopping the build. allows multiple errors to be output before fail. set to 0 to disable
+    errorTimeoutMs?: number;
+    // filter log output. reporter = 'console' | 'teamcity'
+    // return false to prevent log message from being output. return a string to rewrite message contents
+    logFilter?: Array<LogFilterFunction>
 }
 
 export class Build extends TaskList {
@@ -36,8 +43,8 @@ export class Build extends TaskList {
             ...options
         };
         this._reporter = (this._options.teamcity === true)
-            ? new TeamCityReporter()
-            : new ConsoleReporter();
+            ? new TeamCityReporter(this._options.logFilter)
+            : new ConsoleReporter(this._options.logFilter);
     }
 
     serial(syncTasks: (build: Build) => void): Build {
@@ -119,7 +126,7 @@ export class Build extends TaskList {
 
         // the build will start when the reporter subscribes
         this._reporter.subscribe(this.asSync(), (err?: any) => {
-            // on complete clear timeout if it was set
+            // on complete clear timeout if it was set. this allows main process to exit
             if (timeoutId) {
                 clearTimeout(timeoutId);
             }

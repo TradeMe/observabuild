@@ -1,5 +1,5 @@
 import { ITask } from './task';
-import { Reporter } from './reporter';
+import { LogFilterFunction, Reporter } from './reporter';
 import { TeamCityLogger } from './teamcity-logger';
 import { TaskArtifact, TaskData, TaskDataLogLevel, TaskDone, TaskError, TaskStart } from './task-event';
 
@@ -10,17 +10,25 @@ export function isRunningInTeamCity(): boolean {
 export class TeamCityReporter extends Reporter {
     private _logger: TeamCityLogger = new TeamCityLogger();
 
+    constructor(logFilter?: Array<LogFilterFunction>) {
+        super(logFilter);
+    }
+
     logStart(): void {
         this._logger.message('Build started');
     }
 
     logData(event: TaskData): void {
+        let filteredMessage = this.logFilter(event.data || '', event.logLevel);
+        if (!filteredMessage)
+            return;
+        // trim trailing whitespace
         if (event.data.indexOf('##teamcity') !== -1) {
             console.log(event.data);
             return;
         }
         // trim trailing whitespace
-        let message = (event.data || '').replace(/[\s\r\n]+$/, '');
+        let message = (filteredMessage || '').replace(/[\s\r\n]+$/, '');
         message = this.addPrefix(event.task, message);
         switch (event.logLevel)
         {
@@ -105,12 +113,15 @@ export class TeamCityReporter extends Reporter {
     logComplete(runTimeMs: number): void {
         let runTime = (runTimeMs / 1000).toFixed(2);
         this._logger.message(`Build complete in ${runTime}s`);
-        // this._logger.buildStatus('');
     }
 
     private addPrefix(task: ITask, message: string): string {
         if (task.flowId)
             return message; // ignore prefix if a flowId is specified as they perform the same function
         return task.prefix ? `${task.prefix}: ${message || ''}` : message;
+    }
+
+    private logFilter(message: string, logLevel: TaskDataLogLevel): string | null {
+        return super.filterMessage(message, 'teamcity', logLevel);
     }
 }
