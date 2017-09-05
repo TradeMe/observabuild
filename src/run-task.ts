@@ -40,14 +40,23 @@ export class RunTask implements AnonymousSubscription {
             .concat(this._subject);
 
         this._process.stdout.on('data', (data: string | Buffer): void => {
+            let stdout = data.toString();
+
+            if (this._task.response) {
+                let result = this._task.response(stdout);
+                if (typeof result !== 'string')
+                    return;
+                stdout = result;
+            }
+
             if (this._unsubscribed) {
                 // if the _subject observable has been unsubscribed then we send the stdout
                 // directly to the reporter
-                this._reporter.next(new TaskData(this._task, data.toString()));
+                this._reporter.next(new TaskData(this._task, stdout));
                 return;
             }
             
-            this._subject.next(new TaskData(this._task, data.toString()));
+            this._subject.next(new TaskData(this._task, stdout));
         });
 
         let errorTimeoutId: NodeJS.Timer | undefined;
@@ -105,7 +114,7 @@ export class RunTask implements AnonymousSubscription {
             this._complete = true;
             if (this._error || this._unsubscribed)
                 return;
-            if (!exitCode) {
+            if (!exitCode || this._task.haltOnErrors === false) {
                 this._subject.next(new TaskDone(this._task, this._startTime));
                 this._subject.complete();
             } else {

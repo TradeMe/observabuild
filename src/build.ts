@@ -68,20 +68,7 @@ export class Build extends TaskList {
     }
 
     run(task: IRunTask): Build {
-        let runTask = RunTask.create(task, this._reporter, this._options.errorTimeoutMs || 0);
-        if (task.response) {
-            let response = task.response;
-            runTask.filter((event: TaskEvent): boolean => {
-                if (event instanceof TaskData) {
-                    let result = response(event.data);
-                    if (typeof result !== 'string')
-                        return false;
-                    event.data = result;
-                }
-                return true;
-            });
-        }
-        this.add(runTask);
+        this.add(RunTask.create(task, this._reporter, this._options.errorTimeoutMs || 0));
         return this;
     }
 

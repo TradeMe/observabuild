@@ -81,7 +81,7 @@ export class TeamCityReporter extends Reporter {
             }
         }
         this.closeBlock(error.task);
-        this._logger.buildProblem(`${error.task.name} failed`);
+        this._logger.buildProblem(`${error.task.name || error.task.prefix ||  'Build'} failed`);
     }
 
     private openBlock(task: ITask): void {
