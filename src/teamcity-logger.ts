@@ -68,5 +68,3 @@ export class TeamCityLogger {
         return message.replace(/[^\0-~]/g, (ch: string) => `|0x${("000" + ch.charCodeAt(0).toString(16)).slice(-4)}`);
     }
 }
-
-

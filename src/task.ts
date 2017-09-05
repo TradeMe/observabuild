@@ -34,4 +34,5 @@ export interface IRunTask extends ITask {
     options?: SpawnOptions;
     memoryLimitMb?: number;
     haltOnErrors?: boolean;
+    response?: (data: string) => string | void;
 }

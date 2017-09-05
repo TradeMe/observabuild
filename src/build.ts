@@ -1,13 +1,15 @@
 import { Observable } from 'rxjs/Observable';
 import { Subject } from 'rxjs/Subject';
 const OS = require('os');
+import 'rxjs/add/observable/if';
+import 'rxjs/add/operator/filter';
 
 import { ConsoleReporter } from './console-reporter';
 import { DoTask } from './do-task';
 import { RunTask } from './run-task';
 import { IDoTask, IRunTask } from './task';
 import { LogFilterFunction, IReporter } from './reporter';
-import { TaskDataLogLevel } from './task-event';
+import { TaskData, TaskDataLogLevel, TaskEvent } from './task-event';
 import { TaskList } from './task-list';
 import { isRunningInTeamCity, TeamCityReporter } from './teamcity-reporter';
 
@@ -32,7 +34,6 @@ export class Build extends TaskList {
     private _reporter: IReporter;
     private _options: IBuildOptions;
     private _isSubTask: boolean = false;
-    private _indent: number = 0;
 
     constructor(options?: IBuildOptions) {
         super();
@@ -48,23 +49,16 @@ export class Build extends TaskList {
     }
 
     serial(syncTasks: (build: Build) => void): Build {
-        let build = new Build();
-        build._isSubTask = true;
-        build._indent = this._indent + 1;
-        syncTasks(build);
-        if (!build.empty()) {
+        let build = this.createSubTask(syncTasks);
+        if (build)
             this.add(build.asSync());
-        }
         return this;
     }
 
     parallel(asyncTasks: (build: Build) => void): Build {
-        let build = new Build();
-        build._isSubTask = true;
-        asyncTasks(build);
-        if (!build.empty()) {
+        let build = this.createSubTask(asyncTasks);
+        if (build)
             this.add(build.asAsync());
-        }
         return this;
     }
 
@@ -74,7 +68,32 @@ export class Build extends TaskList {
     }
 
     run(task: IRunTask): Build {
-        this.add(RunTask.create(task, this._reporter, this._options.errorTimeoutMs || 0));
+        let runTask = RunTask.create(task, this._reporter, this._options.errorTimeoutMs || 0);
+        if (task.response) {
+            let response = task.response;
+            runTask.filter((event: TaskEvent): boolean => {
+                if (event instanceof TaskData) {
+                    let result = response(event.data);
+                    if (typeof result !== 'string')
+                        return false;
+                    event.data = result;
+                }
+                return true;
+            });
+        }
+        this.add(runTask);
+        return this;
+    }
+
+    if(condition: () => boolean, ifTasks: (build: Build) => void, elseTasks?: (build: Build) => void): Build {
+        let build = this.createSubTask(ifTasks);
+        if (build) {
+            let elseBuild = elseTasks ? this.createSubTask(elseTasks) : null;
+            let task = elseBuild
+                ? Observable.if<TaskEvent, TaskEvent>(condition, build.asSync(), elseBuild.asSync())
+                : Observable.if<TaskEvent, TaskEvent>(condition, build.asSync());
+            this.add(task);
+        }
         return this;
     }
 
@@ -124,14 +143,6 @@ export class Build extends TaskList {
 
         let timeoutId: NodeJS.Timer;
 
-        // the build will start when the reporter subscribes
-        this._reporter.subscribe(this.asSync(), (err?: any) => {
-            // on complete clear timeout if it was set. this allows main process to exit
-            if (timeoutId) {
-                clearTimeout(timeoutId);
-            }
-        });
-
         if (this._options.timeoutSeconds) {
             timeoutId = setTimeout(() => {
                 this._reporter.log(`Build timeout after ${this._options.timeoutSeconds} seconds. stopping build.`);
@@ -140,10 +151,27 @@ export class Build extends TaskList {
             }, this._options.timeoutSeconds * 1000);
         }
 
+        // the build will start when the reporter subscribes
+        this._reporter.subscribe(this.asSync(), (err?: any) => {
+            // on complete clear timeout if it was set. this allows main process to exit
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
+        });
+
         process.on('SIGTERM', () => {
             this._reporter.log('SIGTERM received. stopping build');
             this._reporter.unsubscribe();
             process.exitCode = 1;
         });
+    }
+
+    private createSubTask(tasks: (build: Build) => void): Build | null {
+        let build = new Build();
+        build._isSubTask = true;
+        tasks(build);
+        if (build.empty())
+            return null;
+        return build;
     }
 }
