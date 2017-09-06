@@ -7,8 +7,8 @@ import 'rxjs/add/operator/filter';
 import { ConsoleReporter } from './console-reporter';
 import { DoTask } from './do-task';
 import { RunTask } from './run-task';
-import { IDoTask, IRunTask } from './task';
-import { LogFilterFunction, IReporter } from './reporter';
+import { EventFilterFunction, IDoTask, IRunTask } from './task';
+import { IReporter } from './reporter';
 import { TaskData, TaskDataLogLevel, TaskEvent } from './task-event';
 import { TaskList } from './task-list';
 import { isRunningInTeamCity, TeamCityReporter } from './teamcity-reporter';
@@ -25,9 +25,9 @@ export interface IBuildOptions {
     teamcity?: boolean;
     // time to wait after a stderr before stopping the build. allows multiple errors to be output before fail. set to 0 to disable
     errorTimeoutMs?: number;
-    // filter log output. reporter = 'console' | 'teamcity'
-    // return false to prevent log message from being output. return a string to rewrite message contents
-    logFilter?: Array<LogFilterFunction>
+    // filter .run() event output globally
+    // return false to prevent message from being output, a string to rewrite message contents, or throw to stop build
+    eventFilter?: Array<EventFilterFunction>
 }
 
 export class Build extends TaskList {
@@ -44,8 +44,8 @@ export class Build extends TaskList {
             ...options
         };
         this._reporter = (this._options.teamcity === true)
-            ? new TeamCityReporter(this._options.logFilter)
-            : new ConsoleReporter(this._options.logFilter);
+            ? new TeamCityReporter()
+            : new ConsoleReporter();
     }
 
     serial(syncTasks: (build: Build) => void): Build {
@@ -68,6 +68,8 @@ export class Build extends TaskList {
     }
 
     run(task: IRunTask): Build {
+        if (this._options.eventFilter)
+            task.eventFilter = (task.eventFilter || []).concat(this._options.eventFilter);
         this.add(RunTask.create(task, this._reporter, this._options.errorTimeoutMs || 0));
         return this;
     }
@@ -154,7 +156,7 @@ export class Build extends TaskList {
     }
 
     private createSubTask(tasks: (build: Build) => void): Build | null {
-        let build = new Build();
+        let build = new Build(this._options);
         build._isSubTask = true;
         tasks(build);
         if (build.empty())

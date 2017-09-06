@@ -28,6 +28,8 @@ export interface IDoTask extends ITask {
     next: (task: ITaskAction) => string | void;
 }
 
+export type EventFilterFunction = (message: string) => boolean | string;
+
 export interface IRunTask extends ITask {
     command: string;
     args?: string[];
@@ -35,4 +37,5 @@ export interface IRunTask extends ITask {
     memoryLimitMb?: number;
     haltOnErrors?: boolean;
     response?: (data: string) => string | void;
+    eventFilter?: Array<EventFilterFunction>;
 }

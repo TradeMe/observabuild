@@ -45,7 +45,7 @@ export class DoTask implements ITaskAction {
 
     done(message?: string): void {
         if (message && message.length > 0)
-            this._observer.next(new TaskData(this._task, message));
+            this.log(message);
         this._observer.next(new TaskDone(this._task, this._startTime));
         this._observer.complete();
     }

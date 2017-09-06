@@ -8,7 +8,7 @@ import 'rxjs/add/operator/concat';
 const kill = require('tree-kill');
 
 import { IReporter } from './reporter';
-import { IRunTask } from './task';
+import { EventFilterFunction, IRunTask } from './task';
 import { TaskData, TaskDataLogLevel, TaskDone, TaskError, TaskEvent, TaskStart } from './task-event';
 
 export class RunTask implements AnonymousSubscription {
@@ -22,6 +22,8 @@ export class RunTask implements AnonymousSubscription {
     private _complete: boolean = false;
     private _unsubscribed: boolean = false;
     private _error: boolean = false;
+
+    private _errorTimeoutId: NodeJS.Timer | undefined;
 
     constructor(private _task: IRunTask, private _reporter: IReporter, private _errorTimeoutMs: number) {
         let command = this._task.command;
@@ -41,68 +43,18 @@ export class RunTask implements AnonymousSubscription {
 
         this._process.stdout.on('data', (data: string | Buffer): void => {
             let stdout = data.toString();
-
-            if (this._task.response) {
-                let result = this._task.response(stdout);
-                if (typeof result !== 'string')
-                    return;
-                stdout = result;
-            }
-
-            if (this._unsubscribed) {
-                // if the _subject observable has been unsubscribed then we send the stdout
-                // directly to the reporter
-                this._reporter.next(new TaskData(this._task, stdout));
-                return;
-            }
-            
-            this._subject.next(new TaskData(this._task, stdout));
+            this.log(stdout);
         });
-
-        let errorTimeoutId: NodeJS.Timer | undefined;
-        let lastError: string | undefined;
 
         this._process.stderr.on('data', (data: string | Buffer): void => {
             let stderr = data.toString();
 
+            // if this is a warning, emit as normal
             if (/warning/i.test(stderr)) {
-                // if this is a warning, emit as normal
-                this._subject.next(new TaskData(this._task, stderr, TaskDataLogLevel.warn));
+                this.log(stderr, TaskDataLogLevel.warn);
                 return;
             }
-
-            if (this._task.haltOnErrors === false) {
-                // if !haltOnErrors emit as normal
-                this._subject.next(new TaskData(this._task, stderr, TaskDataLogLevel.error));
-                return;
-            }
-
-            if (this._unsubscribed || this._error) {
-                // if the _subject observable has been unsubscribed then we send the error
-                // directly to the reporter
-                this._reporter.next(new TaskData(this._task, stderr, TaskDataLogLevel.error));
-                return;
-            }
-
-            this._error = true;
-
-            if (!this._errorTimeoutMs) {
-                // error grace period disabled
-                this._subject.error(new TaskError(this._task, this._startTime, stderr));
-                return;
-            }
-
-            if (lastError && errorTimeoutId) {
-                // another error has occured within the error grace period
-                // clear the timer and emit the previous error as normal
-                clearTimeout(errorTimeoutId);
-                this._subject.next(new TaskData(this._task, lastError, TaskDataLogLevel.error));
-            }
-
-            lastError = stderr;
-            errorTimeoutId = setTimeout(() => {
-                this._subject.error(new TaskError(this._task, this._startTime, stderr));
-            }, this._errorTimeoutMs);
+            this.error(stderr);
         });
 
         this._process.on('error', (err: Error): void => {
@@ -128,6 +80,59 @@ export class RunTask implements AnonymousSubscription {
             () => new RunTask(task, reporter, errorTimeoutMs),
             (resource: AnonymousSubscription) => (resource as RunTask).taskEvents$
         );
+    }
+
+    private log(message: string, logLevel?: TaskDataLogLevel): void {
+        // allow task to consume or alter the stdout response stream from the child process
+        if (this._task.response) {
+            let result = this._task.response(message);
+            if (typeof result !== 'string')
+                return;
+            message = result;
+        }
+
+        let filteredMessage = this.filterMessage(message);
+        if (!filteredMessage)
+            return;
+
+        if (this._unsubscribed) {
+            // if the _subject observable has been unsubscribed then we send the message
+            // directly to the reporter
+            this._reporter.next(new TaskData(this._task, filteredMessage, logLevel));
+            return;
+        }
+
+        this._subject.next(new TaskData(this._task, filteredMessage, logLevel));
+    }
+
+    private error(message: string): void {
+        if (this._unsubscribed || this._error) {
+            // if the _subject observable has been unsubscribed then we send the error
+            // directly to the reporter
+            this._reporter.next(new TaskData(this._task, message, TaskDataLogLevel.error));
+            return;
+        }
+        this._subject.next(new TaskData(this._task, message, TaskDataLogLevel.error));
+
+        if (this._task.haltOnErrors === false)
+            return;
+
+        this._error = true;
+        let stopMessage = `Stopping ${this._task.name || this._task.prefix || 'task'} due to errors`;
+        
+        if (this._errorTimeoutMs === 0) {
+            // error grace period disabled
+            this._subject.error(new TaskError(this._task, this._startTime, stopMessage));
+            return;
+        }
+
+        // if another error has occured within the error grace period then reset the timer
+        if (this._errorTimeoutId)
+            clearTimeout(this._errorTimeoutId);
+
+        this._errorTimeoutId = setTimeout(() => {
+            this._subject.error(new TaskError(this._task, this._startTime, stopMessage));
+        }, this._errorTimeoutMs);
     }
 
     private stop(signal?: string): void {
@@ -159,5 +164,28 @@ export class RunTask implements AnonymousSubscription {
         } else {
             this.stop();
         }
+    }
+
+    private filterMessage(message: string): string | null {
+        if (!this._task.eventFilter || !this._task.eventFilter.length)
+            return message;
+        let filteredMessage: string | null = message;
+        this._task.eventFilter.forEach(filterFunc => {
+            if (filteredMessage === null)
+                return;
+            let filterResult: string | boolean;
+            try {
+                filterResult = filterFunc(filteredMessage);
+            } catch(error) {
+                // allow the task to stop the build by throwing from the event filter function
+                this.error(error instanceof Error ? error.message : error);
+                filterResult = false;
+            }
+            if (!filterResult)
+                filteredMessage = null;
+            else if (typeof filterResult === 'string')
+                filteredMessage = filterResult;
+        });
+        return filteredMessage;
     }
 }

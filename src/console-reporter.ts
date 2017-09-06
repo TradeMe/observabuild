@@ -2,24 +2,17 @@ const chalk = require('chalk');
 const logSymbols = require('log-symbols');
 
 import { ITask } from './task';
-import { LogFilterFunction, Reporter } from './reporter';
+import { Reporter } from './reporter';
 import { TaskArtifact, TaskData, TaskDataLogLevel, TaskDone, TaskError, TaskStart } from './task-event';
 
 export class ConsoleReporter extends Reporter {
-    constructor(logFilter?: Array<LogFilterFunction>) {
-        super(logFilter);
-    }
-
     logStart(): void {
         console.log('Build started');
     }
 
     logData(event: TaskData): void {
-        let filteredMessage = this.logFilter(event.data || '', event.logLevel);
-        if (!filteredMessage)
-            return;
         // trim trailing whitespace
-        let message = (filteredMessage || '').replace(/[\s\r\n]+$/, '');
+        let message = (event.data || '').replace(/[\s\r\n]+$/, '');
         let prefix = this.addPrefix(event.task);
         switch (event.logLevel)
         {
@@ -89,9 +82,5 @@ export class ConsoleReporter extends Reporter {
             return message || '';
         let prefix = `${task.prefix}:      `.substring(0, 7);
         return `${chalk.gray(prefix)}${message || ''}`;
-    }
-
-    private logFilter(message: string, logLevel: TaskDataLogLevel): string | null {
-        return super.filterMessage(message, 'console', logLevel);
     }
 }
