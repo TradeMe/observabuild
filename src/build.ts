@@ -4,48 +4,43 @@ const OS = require('os');
 import 'rxjs/add/observable/if';
 import 'rxjs/add/operator/filter';
 
+import { initialState, IBuildState, IStore, Store } from './store';
 import { ConsoleReporter } from './console-reporter';
 import { DoTask } from './do-task';
 import { RunTask } from './run-task';
-import { EventFilterFunction, IDoTask, IRunTask } from './task';
-import { IReporter } from './reporter';
-import { TaskData, TaskDataLogLevel, TaskEvent } from './task-event';
+import { IDoTask, IRunTask, ITaskAction } from './task';
+import { TaskData, TaskEvent } from './task-event';
 import { TaskList } from './task-list';
-import { isRunningInTeamCity, TeamCityReporter } from './teamcity-reporter';
+import { TeamCityReporter } from './teamcity-reporter';
 
 const IS_WINDOWS = OS.platform().indexOf('win32') !== -1;
 const CMD_EXT = IS_WINDOWS ? '.cmd' : '';
 
-const DEFAULT_BUILD_TIMEOUT_SECONDS = 60 * 60; // halt build after 1 hour ...
-
-export interface IBuildOptions {
-    // halt the build if it runs longer than this. set to 0 to disable
-    timeoutSeconds?: number;
-    // override automatic teamcity reporter detection
-    teamcity?: boolean;
-    // time to wait after a stderr before stopping the build. allows multiple errors to be output before fail. set to 0 to disable
-    errorTimeoutMs?: number;
-    // filter .run() event output globally
-    // return false to prevent message from being output, a string to rewrite message contents, or throw to stop build
-    eventFilter?: Array<EventFilterFunction>
-}
-
 export class Build extends TaskList {
-    private _reporter: IReporter;
-    private _options: IBuildOptions;
-    private _isSubTask: boolean = false;
-
-    constructor(options?: IBuildOptions) {
+    private constructor(
+        private _store: IStore,
+        private _closeSubject: Subject<TaskEvent>,
+        private _isSubTask: boolean
+    ) {
         super();
-        this._options = {
-            timeoutSeconds: DEFAULT_BUILD_TIMEOUT_SECONDS,
-            teamcity: isRunningInTeamCity(),
-            errorTimeoutMs: 1000,
-            ...options
-        };
-        this._reporter = (this._options.teamcity === true)
-            ? new TeamCityReporter()
-            : new ConsoleReporter();
+    }
+
+    static create(buildState?: IBuildState): Build {
+        let store = new Store({
+            ...initialState,
+            ...buildState
+        });
+        let closeSubject = new Subject<TaskEvent>();
+        return new Build(store, closeSubject, false);
+    }
+
+    select<T>(selector: (state: IBuildState) => T): T {
+        return this._store.select(selector);
+    }
+
+    setState(state: IBuildState): Build {
+        this._store.setState(state);
+        return this;
     }
 
     serial(syncTasks: (build: Build) => void): Build {
@@ -62,27 +57,35 @@ export class Build extends TaskList {
         return this;
     }
 
-    do(task: IDoTask): Build {
-        this.add(DoTask.create(task));
+    do(task: IDoTask | ((task: ITaskAction) => string | void)): Build {
+        if (typeof task === 'function')
+            task = { next: task };
+        this.add(DoTask.create(task, this._store));
         return this;
     }
 
     run(task: IRunTask): Build {
-        if (this._options.eventFilter)
-            task.eventFilter = (task.eventFilter || []).concat(this._options.eventFilter);
-        this.add(RunTask.create(task, this._reporter, this._options.errorTimeoutMs || 0));
+        let globalEventFilter = this._store.select(state => state.eventFilter);
+        if (globalEventFilter && globalEventFilter.length)
+            task.eventFilter = (task.eventFilter || []).concat(globalEventFilter);
+        this.add(RunTask.create(task, this._store, this._closeSubject));
         return this;
     }
 
-    if(condition: () => boolean, ifTasks: (build: Build) => void, elseTasks?: (build: Build) => void): Build {
+    if(condition: (state: IBuildState) => boolean, ifTasks: (build: Build) => void, elseTasks?: (build: Build) => void): Build {
         let build = this.createSubTask(ifTasks);
         if (build) {
             let elseBuild = elseTasks ? this.createSubTask(elseTasks) : null;
             let task = elseBuild
-                ? Observable.if<TaskEvent, TaskEvent>(condition, build.asSync(), elseBuild.asSync())
-                : Observable.if<TaskEvent, TaskEvent>(condition, build.asSync());
+                ? Observable.if<TaskEvent, TaskEvent>(() => this._store.conditional(condition), build.asSync(), elseBuild.asSync())
+                : Observable.if<TaskEvent, TaskEvent>(() => this._store.conditional(condition), build.asSync());
             this.add(task);
         }
+        return this;
+    }
+
+    log(message: string): Build {
+        this.add(Observable.of<TaskEvent>(new TaskData({}, message)));
         return this;
     }
 
@@ -115,10 +118,19 @@ export class Build extends TaskList {
 
     npm(task: IRunTask): Build {
         let npmTask = { ...task };
-        npmTask.command = 'npm';
+        npmTask.command = `npm${CMD_EXT}`;
         npmTask.args = task.args || [];
         npmTask.args.unshift(task.command);
         this.run(npmTask);
+        return this;
+    }
+
+    npmRun(task: IRunTask): Build {
+        let runTask = { ...task };
+        runTask.command = 'run';
+        runTask.args = task.args || [];
+        runTask.args.unshift(task.command);
+        this.npm(runTask);
         return this;
     }
 
@@ -130,34 +142,40 @@ export class Build extends TaskList {
             throw new Error('No tasks queued in the build');
         }
 
-        let timeoutId: NodeJS.Timer;
+        let useTeamcity = this._store.select(state => state.teamcity);
+        let reporter = useTeamcity ? new TeamCityReporter() : new ConsoleReporter();
 
-        if (this._options.timeoutSeconds) {
+        let timeoutSeconds = this._store.select(state => state.timeoutSeconds || 0);
+        let timeoutId: NodeJS.Timer;
+        if (timeoutSeconds > 0) {
             timeoutId = setTimeout(() => {
-                this._reporter.log(`Build timeout after ${this._options.timeoutSeconds} seconds. stopping build.`);
-                this._reporter.unsubscribe();
+                reporter.log(`Build timeout after ${timeoutSeconds} seconds. stopping build.`);
+                reporter.unsubscribe();
                 process.exitCode = 1;
-            }, this._options.timeoutSeconds * 1000);
+            }, timeoutSeconds * 1000);
         }
 
         // the build will start when the reporter subscribes
-        this._reporter.subscribe(this.asSync(), (err?: any) => {
+        reporter.subscribe(this.asSync(), (err?: any) => {
             // on complete clear timeout if it was set. this allows main process to exit
             if (timeoutId) {
                 clearTimeout(timeoutId);
             }
         });
 
+        // if the main TaskEvent observable stream errors or is unsubscribed, the remaining events
+        // will then be dispatched to closeSubject.
+        this._closeSubject.subscribe(event => reporter.next(event));
+        
         process.on('SIGTERM', () => {
-            this._reporter.log('SIGTERM received. stopping build');
-            this._reporter.unsubscribe();
+            reporter.log('SIGTERM received. stopping build');
+            reporter.unsubscribe();
             process.exitCode = 1;
         });
     }
 
     private createSubTask(tasks: (build: Build) => void): Build | null {
-        let build = new Build(this._options);
-        build._isSubTask = true;
+        let build = new Build(this._store, this._closeSubject, true);
         tasks(build);
         if (build.empty())
             return null;

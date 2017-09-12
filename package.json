@@ -1,6 +1,6 @@
 {
   "name": "@trademe/observabuild",
-  "version": "0.1.0-beta.5",
+  "version": "0.1.0-beta.6",
   "description": "TradeMe observable build",
   "main": "./lib/index.js",
   "typings": "./lib/index.d.ts",
@@ -20,8 +20,8 @@
     "archiver": "^2.0.3",
     "chalk": "^2.1.0",
     "dedent": "^0.7.0",
+    "fs-extra": "^4.0.1",
     "log-symbols": "^2.0.0",
-    "mkdirp": "^0.5.1",
     "ncp": "^2.0.0",
     "nsp": "^2.7.0",
     "rimraf": "^2.6.1",

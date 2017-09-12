@@ -1,5 +1,7 @@
 import { SpawnOptions } from 'child_process';
 
+import { IBuildState, IStore } from './store';
+
 export interface ITaskStatusMessage {
     start?: string;
     success?: string;
@@ -19,6 +21,8 @@ export interface ITaskAction {
     warn: (message: string) => void,
     error: (message: string, error?: Error) => void,
     done: (message?: string) => void,
+    select<T>(selector: (state: IBuildState) => T): T;  
+    setState(state: IBuildState): void;
     securityCheck(projectPath: string): void;
     publishArtifact(srcPath: string, zipPath: string): void;
     copyFolder(srcPath: string, destPath: string | undefined): void;
@@ -32,10 +36,10 @@ export type EventFilterFunction = (message: string) => boolean | string;
 
 export interface IRunTask extends ITask {
     command: string;
-    args?: string[];
+    args?: (string | ((state: IBuildState) => string))[];
     options?: SpawnOptions;
     memoryLimitMb?: number;
     haltOnErrors?: boolean;
-    response?: (data: string) => string | void;
+    response?: (data: string, store: IStore) => string | void;
     eventFilter?: Array<EventFilterFunction>;
 }

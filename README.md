@@ -11,7 +11,7 @@ Stops running child processes on error.
 ```javascript
 const { Build } = require('@trademe/observabuild');
 
-new Build()
+Build.create()
     .parallel(tasks => {
         tasks.yarn({ command: 'test:delay', name: 'Async One', prefix: 'Async1' });
         tasks.node({ command: './test/delay.js', name: 'Async Two', prefix: 'Async2' });
@@ -22,7 +22,7 @@ new Build()
             if (someLongRunningTask())
                 task.done('finished long running task');
             else
-                task.fail();
+                task.error('task failed');
         },
         name: 'Long running task', prefix: 'Three'
     })

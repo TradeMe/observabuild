@@ -7,8 +7,8 @@ import 'rxjs/add/observable/using';
 import 'rxjs/add/operator/concat';
 const kill = require('tree-kill');
 
-import { IReporter } from './reporter';
 import { EventFilterFunction, IRunTask } from './task';
+import { IStore } from './store';
 import { TaskData, TaskDataLogLevel, TaskDone, TaskError, TaskEvent, TaskStart } from './task-event';
 
 export class RunTask implements AnonymousSubscription {
@@ -25,16 +25,22 @@ export class RunTask implements AnonymousSubscription {
 
     private _errorTimeoutId: NodeJS.Timer | undefined;
 
-    constructor(private _task: IRunTask, private _reporter: IReporter, private _errorTimeoutMs: number) {
+    constructor(
+        private _task: IRunTask,
+        private _store: IStore,
+        private _closeSubject: Subject<TaskEvent>
+    ) {
         let command = this._task.command;
-        let args = this._task.args;
+
+        // if any of the args are functions then resolve the value now
+        let args = (this._task.args || []).map(arg => typeof arg === 'function' ? this._store.select(arg) : arg);
 
         if (this._task.memoryLimitMb) {
             args = args || [];
             args.unshift(`--max-old-space-size=${this._task.memoryLimitMb}`);
         }
 
-        this._commandLine = `${command} ${(args || []).join(' ')}`;
+        this._commandLine = `${command} ${args.join(' ')}`;
         this._process = spawn(command, args, this._task.options);
 
         // only emit TaskStart after subscriber attaches
@@ -59,6 +65,7 @@ export class RunTask implements AnonymousSubscription {
 
         this._process.on('error', (err: Error): void => {
             this._error = true;
+            this._store.setState({ success: false });
             this._subject.error(new TaskError(this._task, this._startTime, `process error`, err));
         });
 
@@ -70,14 +77,15 @@ export class RunTask implements AnonymousSubscription {
                 this._subject.next(new TaskDone(this._task, this._startTime));
                 this._subject.complete();
             } else {
+                this._store.setState({ success: false });
                 this._subject.error(new TaskError(this._task, this._startTime, `process exited with code ${exitCode}`));
             }
         });
     }
 
-    static create(task: IRunTask, reporter: IReporter, errorTimeoutMs: number): Observable<TaskEvent> {
+    static create(task: IRunTask, store: IStore, closeSubject: Subject<TaskEvent>): Observable<TaskEvent> {
         return Observable.using(
-            () => new RunTask(task, reporter, errorTimeoutMs),
+            () => new RunTask(task, store, closeSubject),
             (resource: AnonymousSubscription) => (resource as RunTask).taskEvents$
         );
     }
@@ -85,7 +93,7 @@ export class RunTask implements AnonymousSubscription {
     private log(message: string, logLevel?: TaskDataLogLevel): void {
         // allow task to consume or alter the stdout response stream from the child process
         if (this._task.response) {
-            let result = this._task.response(message);
+            let result = this._task.response(message, this._store);
             if (typeof result !== 'string')
                 return;
             message = result;
@@ -98,7 +106,7 @@ export class RunTask implements AnonymousSubscription {
         if (this._unsubscribed) {
             // if the _subject observable has been unsubscribed then we send the message
             // directly to the reporter
-            this._reporter.next(new TaskData(this._task, filteredMessage, logLevel));
+            this._closeSubject.next(new TaskData(this._task, filteredMessage, logLevel));
             return;
         }
 
@@ -109,7 +117,7 @@ export class RunTask implements AnonymousSubscription {
         if (this._unsubscribed || this._error) {
             // if the _subject observable has been unsubscribed then we send the error
             // directly to the reporter
-            this._reporter.next(new TaskData(this._task, message, TaskDataLogLevel.error));
+            this._closeSubject.next(new TaskData(this._task, message, TaskDataLogLevel.error));
             return;
         }
         this._subject.next(new TaskData(this._task, message, TaskDataLogLevel.error));
@@ -120,8 +128,10 @@ export class RunTask implements AnonymousSubscription {
         this._error = true;
         let stopMessage = `Stopping ${this._task.name || this._task.prefix || 'task'} due to errors`;
         
-        if (this._errorTimeoutMs === 0) {
+        let errorTimeoutMs = this._store.select(state => state.errorTimeoutMs || 0);
+        if (errorTimeoutMs === 0) {
             // error grace period disabled
+            this._store.setState({ success: false });
             this._subject.error(new TaskError(this._task, this._startTime, stopMessage));
             return;
         }
@@ -131,20 +141,21 @@ export class RunTask implements AnonymousSubscription {
             clearTimeout(this._errorTimeoutId);
 
         this._errorTimeoutId = setTimeout(() => {
+            this._store.setState({ success: false });
             this._subject.error(new TaskError(this._task, this._startTime, stopMessage));
-        }, this._errorTimeoutMs);
+        }, errorTimeoutMs);
     }
 
     private stop(signal?: string): void {
         // npm run, yarn, and at-loader will spawn their own child processes. use tree-kill to also stop these children
         kill(this._process.pid, signal || 'SIGTERM', (err: Error) => {
-            // use _reporter directly since at this point the _subject is unsubscribed
+            // use _closeSubject since at this point the _subject is unsubscribed
             if (err) {
-                this._reporter.next(new TaskData(this._task, `${this._task.name} process could not be stopped (command: ${this._commandLine})`, TaskDataLogLevel.error, err));
+                this._closeSubject.next(new TaskData(this._task, `${this._task.name} process could not be stopped (command: ${this._commandLine})`, TaskDataLogLevel.error, err));
                 process.exitCode = 1;
             } else {
                 let runTimeMs = Math.floor(new Date().getTime() - this._startTime.getTime());
-                this._reporter.next(new TaskData(this._task, `${this._task.name} process stopped after ${runTimeMs}ms`, TaskDataLogLevel.info));
+                this._closeSubject.next(new TaskData(this._task, `${this._task.name} process stopped after ${runTimeMs}ms`, TaskDataLogLevel.info));
             }
         });
     }

@@ -12,7 +12,7 @@ const { Build } = require('../lib'); // require('@trademe/observabuild');
 
 const FAIL_BUILD = process.argv.join('').indexOf('--fail') !== -1;
 
-new Build()
+Build.create()
     .do({ next: (task) => `New build !` })
     .parallel(tasks => {
         tasks.yarn({ command: 'test:delay', name: 'delay one', prefix: 'ONE', flowId: 'tcOne' });
@@ -28,5 +28,5 @@ new Build()
         }
     })
     .do({ next: (task) => { task.warn('this is a warning'); task.done() }, prefix: 'Warn' })
-    .do({ next: (task) => `Build succeeded` })
+    .log('Build succeeded')
     .start();
