@@ -1,5 +1,5 @@
 import { AnonymousSubscription } from 'rxjs/Subscription';
-import { ChildProcess, execSync, spawn, SpawnOptions } from 'child_process';
+import { ChildProcess, spawn } from 'child_process';
 import { Observable } from 'rxjs/Observable';
 import { Subject } from 'rxjs/Subject';
 import 'rxjs/add/observable/of';
@@ -7,7 +7,7 @@ import 'rxjs/add/observable/using';
 import 'rxjs/add/operator/concat';
 const kill = require('tree-kill');
 
-import { EventFilterFunction, IRunTask } from './task';
+import { IRunTask } from './task';
 import { IStore } from './store';
 import { TaskData, TaskDataLogLevel, TaskDone, TaskError, TaskEvent, TaskStart } from './task-event';
 
@@ -69,7 +69,7 @@ export class RunTask implements AnonymousSubscription {
             this._subject.error(new TaskError(this._task, this._startTime, `process error`, err));
         });
 
-        this._process.on('exit', (exitCode, signal) => {
+        this._process.on('exit', exitCode => {
             this._complete = true;
             if (this._error || this._unsubscribed)
                 return;
@@ -136,7 +136,7 @@ export class RunTask implements AnonymousSubscription {
             return;
         }
 
-        // if another error has occured within the error grace period then reset the timer
+        // if another error has occurred within the error grace period then reset the timer
         if (this._errorTimeoutId)
             clearTimeout(this._errorTimeoutId);
 

@@ -28,7 +28,7 @@ export class DoTask implements ITaskAction {
                     action.done(result);
             } catch (error) {
                 action.setState({ success: false });
-                action.error('An error occured in do.next', error);
+                action.error('An error occurred in do.next', error);
             }
         });
     }

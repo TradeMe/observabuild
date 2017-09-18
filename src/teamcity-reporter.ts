@@ -108,6 +108,12 @@ export class TeamCityReporter extends Reporter {
         this._logger.message(`Build complete in ${runTime}s`);
     }
 
+    logTimeout(message: string): void {
+        // log error
+        this._logger.error(message, null);
+        this._logger.buildProblem('Build timed out');
+    }
+
     private addPrefix(task: ITask, message: string): string {
         if (task.flowId)
             return message; // ignore prefix if a flowId is specified as they perform the same function

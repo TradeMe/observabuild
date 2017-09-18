@@ -59,7 +59,7 @@ export class TeamCityLogger {
             .replace(/\n/g, `|n`) // line feed
             .replace(/\r/g, `|r`) // carriage return
             .replace(/\[/g, `|[`) // opening bracket
-            .replace(/\]/g, `|]`); // closing bracket
+            .replace(/]/g, `|]`); // closing bracket
         return this.escapeUnicode(message);
     }
 

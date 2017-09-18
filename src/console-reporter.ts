@@ -77,6 +77,10 @@ export class ConsoleReporter extends Reporter {
         console.log(logSymbols.success, chalk.green(`Build complete in ${runTime}s`));
     }
 
+    logTimeout(message: string): void {
+        console.error(logSymbols.error, chalk.red(message));
+    }
+
     private addPrefix(task: ITask, message?: string): string {
         if (!task.prefix)
             return message || '';

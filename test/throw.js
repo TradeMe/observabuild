@@ -1,4 +1,3 @@
-
 let errorSeconds = 5;
 
 console.log('start throw test');

@@ -146,10 +146,11 @@ export class Build extends TaskList {
         let reporter = useTeamcity ? new TeamCityReporter() : new ConsoleReporter();
 
         let timeoutSeconds = this._store.select(state => state.timeoutSeconds || 0);
-        let timeoutId: NodeJS.Timer;
+        let timeoutId: NodeJS.Timer | undefined;
         if (timeoutSeconds > 0) {
             timeoutId = setTimeout(() => {
-                reporter.log(`Build timeout after ${timeoutSeconds} seconds. stopping build.`);
+                timeoutId = undefined;
+                reporter.timeout(`Build timeout after ${timeoutSeconds} seconds. stopping build.`);
                 reporter.unsubscribe();
                 process.exitCode = 1;
             }, timeoutSeconds * 1000);

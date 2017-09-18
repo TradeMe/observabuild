@@ -1,7 +1,7 @@
 import { Observable } from 'rxjs/Observable';
 import { Subscription } from 'rxjs/Subscription';
 
-import { ERROR_EXIT_CODE, TaskArtifact, TaskData, TaskDataLogLevel, TaskDone, TaskError, TaskEvent, TaskStart } from './task-event';
+import { ERROR_EXIT_CODE, TaskArtifact, TaskData, TaskDone, TaskError, TaskEvent, TaskStart } from './task-event';
 
 export interface IReporter {
     subscribe(tasks: Observable<TaskEvent>, complete: () => void): void;
@@ -13,8 +13,6 @@ export interface IReporter {
 export abstract class Reporter implements IReporter {
     private _subscription: Subscription;
     private _startTime: number;
-    private _success: boolean = true;
-    private _exitCode: number;
     private _notifyComplete: (err?: any) => void;
 
     subscribe(tasks: Observable<TaskEvent>, complete: (err?: any) => void): void {
@@ -69,6 +67,10 @@ export abstract class Reporter implements IReporter {
         this.logData(new TaskData({}, message));
     }
 
+    timeout(message: string): void {
+        this.logTimeout(message);
+    }
+
     protected abstract logStart(): void;
     protected abstract logData(event: TaskData): void;
     protected abstract logTaskStart(event: TaskStart): void;
@@ -77,4 +79,5 @@ export abstract class Reporter implements IReporter {
     protected abstract logUnhandledError(error: any): void;
     protected abstract logArtifact(event: TaskArtifact): void;
     protected abstract logComplete(runTimeMs: number): void;
+    protected abstract logTimeout(message: string): void;
 }

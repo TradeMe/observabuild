@@ -12,20 +12,19 @@ const { Build } = require('../lib'); // require('@trademe/observabuild');
 
 const FAIL_BUILD = process.argv.join('').indexOf('--fail') !== -1;
 
-Build.create()
+Build.create({ failBuild: FAIL_BUILD })
     .do({ next: (task) => `New build !` })
     .parallel(tasks => {
-        tasks.yarn({ command: 'test:delay', name: 'delay one', prefix: 'ONE', flowId: 'tcOne' });
+        tasks.yarn({ command: 'test:delay', name: 'delay one', prefix: 'One', flowId: 'tcOne' });
         tasks.serial(buildTasks => {
             buildTasks
-                .yarn({ command: 'test:delay', name: 'delay two', statusMessage: { start: 'begin two', success: 'two succeeded', fail: 'two failed' }, prefix: 'TWO', flowId: 'tcTwo' })
-                .do({ next: (task) => 'task after delay', statusMessage: { start: 'start after two', success: 'two finished' }, prefix: 'TWO', flowId: 'tcTwo' });
+                .yarn({ command: 'test:delay', name: 'delay two', statusMessage: { start: 'delay two', success: 'two succeeded', fail: 'two failed' }, prefix: 'Two', flowId: 'tcTwo' })
+                .do({ next: (task) => 'task after delay', statusMessage: { start: 'start after two', success: 'two finished' }, prefix: 'Two', flowId: 'tcTwo' });
         });
-        if (!FAIL_BUILD) {
-            tasks.yarn({ command: 'test:delay', name: 'delay three', prefix: 'THREE', flowId: 'tcThree' });
-        } else {
-            tasks.yarn({ command: 'test:error', name: 'throw three', prefix: 'THREE', flowId: 'tcThree' });
-        }
+        tasks.if(state => !state.failBuild,
+            successTasks => successTasks.yarn({ command: 'test:delay', name: 'delay three', prefix: 'Three', flowId: 'tcThree' }),
+            failTasks => failTasks.yarn({ command: 'test:error', name: 'throw three', prefix: 'Three', flowId: 'tcThree' })
+        );
     })
     .do({ next: (task) => { task.warn('this is a warning'); task.done() }, prefix: 'Warn' })
     .log('Build succeeded')
