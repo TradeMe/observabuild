@@ -40,6 +40,7 @@ export interface IRunTask extends ITask {
     options?: SpawnOptions;
     memoryLimitMb?: number;
     haltOnErrors?: boolean;
+    redirectStdErr?: boolean;
     response?: (data: string, store: IStore) => string | void;
     eventFilter?: Array<EventFilterFunction>;
 }

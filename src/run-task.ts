@@ -55,12 +55,14 @@ export class RunTask implements AnonymousSubscription {
         this._process.stderr.on('data', (data: string | Buffer): void => {
             let stderr = data.toString();
 
-            // if this is a warning, emit as normal
             if (/warning/i.test(stderr)) {
+                // if this is a warning, emit as normal
                 this.log(stderr, TaskDataLogLevel.warn);
-                return;
+            } else if (this._task.redirectStdErr === true) {
+                this.log(stderr);
+            } else {
+                this.error(stderr);
             }
-            this.error(stderr);
         });
 
         this._process.on('error', (err: Error): void => {
