@@ -16,11 +16,12 @@ export interface ITask {
 }
 
 export interface ITaskAction {
-    log: (message: string) => void,
-    artifact: (path: string) => void,
-    warn: (message: string) => void,
-    error: (message: string, error?: Error) => void,
-    done: (message?: string) => void,
+    log(message: string): void;
+    artifact(path: string): void;
+    warn(message: string): void;
+    buildStatus(message: string): void;
+    error(message: string, error?: Error): void;
+    done(message?: string): void;
     select<T>(selector: (state: IBuildState) => T): T;  
     setState(state: IBuildState): void;
     securityCheck(projectPath: string): void;

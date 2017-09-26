@@ -6,6 +6,7 @@ import { IDoTask, ITaskAction } from './task';
 import { TaskArtifact, TaskData, TaskDataLogLevel, TaskDone, TaskError, TaskEvent, TaskStart } from './task-event';
 
 const archiver = require('archiver');
+const chalk = require('chalk');
 const dedent = require('dedent');
 const fs = require('fs-extra');
 const { ncp } = require('ncp');
@@ -49,6 +50,10 @@ export class DoTask implements ITaskAction {
         this._observer.next(new TaskData(this._task, message, TaskDataLogLevel.warn));
     }
 
+    buildStatus(message: string): void {
+        this._observer.next(new TaskData(this._task, message, TaskDataLogLevel.buildStatus));
+    }
+
     error(message: string, error?: Error): void {
         this.setState({ success: false });
         this._observer.error(new TaskError(this._task, this._startTime, message, error));
@@ -80,10 +85,25 @@ export class DoTask implements ITaskAction {
             } else {
                 securityVulnerabilities = securityVulnerabilities || [];
                 if (securityVulnerabilities.length) {
-                    this.error(dedent(`
-                        ERROR! One of our dependencies has a known security vulnerability!
-                        NodeSecurityProject check has found matches: ${securityVulnerabilities.join('\r\n')}
-                    `));
+                    let errors = securityVulnerabilities.reduce((result: string, vuln: any) => {
+                        return result + chalk.white(dedent(`
+                            ${chalk.red('ERROR:')} Dependency ${vuln.module}@${vuln.version} has a security vulnerability
+                            
+                            ${vuln.title}
+                            
+                            ${vuln.overview}
+                            
+                            ${vuln.recommendation}
+                            
+                            ${chalk.yellow(`To fix this error edit ./package.json and update the "${ vuln.path[1] }" dependency to a patched version.`)}
+                
+                            Advisory: ${vuln.advisory}
+                            Vulnerable versions: ${vuln.vulnerable_versions}
+                            Patched versions: ${vuln.patched_versions}
+                            Dependency path: ${vuln.path.join(' => ')}
+                        `));
+                    }, '');
+                    this.error(`ERROR! One of our dependencies has a known security vulnerability!\n${errors}`);
                 } else {
                     this.done('Node Security found no dependencies with known vulnerabilities :)');
                 }

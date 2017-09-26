@@ -32,6 +32,9 @@ export class TeamCityReporter extends Reporter {
                 let errorDetails = event.error ? event.error.toString() : null;
                 this._logger.error(message, errorDetails, event.task.flowId);
                 break;
+            case TaskDataLogLevel.buildStatus:
+                this._logger.buildStatus(event.data);
+                break;
             default:
                 this._logger.message(message, event.task.flowId);
         }

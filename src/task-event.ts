@@ -4,7 +4,8 @@ export enum TaskDataLogLevel {
     default,
     info,
     warn,
-    error
+    error,
+    buildStatus
 }
 
 export class TaskData {

@@ -27,6 +27,9 @@ export class ConsoleReporter extends Reporter {
                 if (event.error)
                     console.error(prefix, logSymbols.error, chalk.red(event.error));
                 break;
+            case TaskDataLogLevel.buildStatus:
+                console.log(chalk.green(message));
+                break;
             default:
                 // add prefix to each line of output
                 message.split('\n').map(line => console.log(prefix, line));
