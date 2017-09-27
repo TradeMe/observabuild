@@ -120,13 +120,16 @@ export class DoTask implements ITaskAction {
 
                             ${ignore.reason}
                         `));
-                        this.warn(`${ignoreMessage}\n${chalk.yellow('WARNING:')} ${formatSecurityVulnerability(vuln)}`);
+                        this.warn(`${chalk.yellow('WARNING:')} ${ignoreMessage}`);
+                        this.warn(`${chalk.yellow('WARNING:')} ${formatSecurityVulnerability(vuln)}`);
                         return false;
                     });
                 }
                 if (securityVulnerabilities.length > 0) {
                     let errors = securityVulnerabilities.reduce((result: string, vuln: any) => `${result}${chalk.red('ERROR:')} ${formatSecurityVulnerability(vuln)}`, '');
                     this.error(`ERROR! One of our dependencies has a known security vulnerability!\n${errors}`);
+                } else {
+                    this.done();
                 }
             }
         });
