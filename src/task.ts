@@ -24,7 +24,7 @@ export interface ITaskAction {
     done(message?: string): void;
     select<T>(selector: (state: IBuildState) => T): T;  
     setState(state: IBuildState): void;
-    securityCheck(projectPath: string): void;
+    securityCheck(projectPath: string, ignoreList: Array<IIgnoreSecurityCheck>): void;
     publishArtifact(srcPath: string, zipPath: string): void;
     copyFolder(srcPath: string, destPath: string | undefined): void;
 }
@@ -44,4 +44,12 @@ export interface IRunTask extends ITask {
     redirectStdErr?: boolean;
     response?: (data: string, store: IStore) => string | void;
     eventFilter?: Array<EventFilterFunction>;
+}
+
+export interface IIgnoreSecurityCheck {
+    module: string;
+    version: string;
+    expiry: Date;
+    reason: string;
+    user: string;
 }

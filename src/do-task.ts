@@ -2,7 +2,7 @@ import { Observable } from 'rxjs/Observable';
 import { Subscriber } from 'rxjs/Subscriber';
 
 import { IBuildState, IStore } from './store';
-import { IDoTask, ITaskAction } from './task';
+import { IDoTask, IIgnoreSecurityCheck, ITaskAction } from './task';
 import { TaskArtifact, TaskData, TaskDataLogLevel, TaskDone, TaskError, TaskEvent, TaskStart } from './task-event';
 
 const archiver = require('archiver');
@@ -74,7 +74,26 @@ export class DoTask implements ITaskAction {
         this._store.setState(state);
     }
 
-    securityCheck(projectPath: string): void {
+    securityCheck(projectPath: string, ignoreList: Array<IIgnoreSecurityCheck>): void {
+        function formatSecurityVulnerability(vuln: any) {
+            return chalk.white(dedent(`
+                Dependency ${vuln.module}@${vuln.version} has a security vulnerability
+                
+                ${vuln.title}
+                
+                ${vuln.overview}
+                
+                ${vuln.recommendation}
+                
+                ${chalk.yellow(`To fix this error edit ./package.json and update the "${ vuln.path[1] }" dependency to a patched version.`)}
+    
+                Advisory: ${vuln.advisory}
+                Vulnerable versions: ${vuln.vulnerable_versions}
+                Patched versions: ${vuln.patched_versions}
+                Dependency path: ${vuln.path.join(' => ')}
+            `));
+        }
+
         const options = {
             package: path.join(projectPath, './package.json')
         };
@@ -84,28 +103,28 @@ export class DoTask implements ITaskAction {
                 this.done(err.toString());
             } else {
                 securityVulnerabilities = securityVulnerabilities || [];
-                if (securityVulnerabilities.length) {
-                    let errors = securityVulnerabilities.reduce((result: string, vuln: any) => {
-                        return result + chalk.white(dedent(`
-                            ${chalk.red('ERROR:')} Dependency ${vuln.module}@${vuln.version} has a security vulnerability
-                            
-                            ${vuln.title}
-                            
-                            ${vuln.overview}
-                            
-                            ${vuln.recommendation}
-                            
-                            ${chalk.yellow(`To fix this error edit ./package.json and update the "${ vuln.path[1] }" dependency to a patched version.`)}
-                
-                            Advisory: ${vuln.advisory}
-                            Vulnerable versions: ${vuln.vulnerable_versions}
-                            Patched versions: ${vuln.patched_versions}
-                            Dependency path: ${vuln.path.join(' => ')}
-                        `));
-                    }, '');
-                    this.error(`ERROR! One of our dependencies has a known security vulnerability!\n${errors}`);
-                } else {
+                if (securityVulnerabilities.length === 0) {
                     this.done('Node Security found no dependencies with known vulnerabilities :)');
+                    return;
+                }
+                securityVulnerabilities = securityVulnerabilities.filter((vuln: any) => {
+                    // allow ignoring of nsp check vulnerabilities with user, expiry and reason
+                    // this should only be used for devDependencies, and until module fix is deployed
+                    let ignoreVuln = ignoreList.filter(i => i.module === vuln.module && i.version === vuln.version && i.expiry.getTime() >= Date.now());
+                    if (ignoreVuln.length === 0)
+                        return true;
+                    let [ignore] = ignoreVuln;
+                    let ignoreMessage = chalk.white(dedent(`
+                        ${ignore.user} has disabled security check for ${ignore.module}@${ignore.version} until ${ignore.expiry.toLocaleDateString()}
+
+                        ${ignore.reason}
+                    `));
+                    this.warn(`${ignoreMessage} ${chalk.yellow('WARNING:')} ${formatSecurityVulnerability(vuln)}`);
+                    return false;
+                });                    
+                if (securityVulnerabilities.length > 0) {
+                    let errors = securityVulnerabilities.reduce((result: string, vuln: any) => `${result}${chalk.red('ERROR:')} ${formatSecurityVulnerability(vuln)}`, '');
+                    this.error(`ERROR! One of our dependencies has a known security vulnerability!\n${errors}`);
                 }
             }
         });
