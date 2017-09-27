@@ -74,7 +74,7 @@ export class DoTask implements ITaskAction {
         this._store.setState(state);
     }
 
-    securityCheck(projectPath: string, ignoreList: Array<IIgnoreSecurityCheck>): void {
+    securityCheck(projectPath: string, ignoreList?: Array<IIgnoreSecurityCheck>): void {
         function formatSecurityVulnerability(vuln: any) {
             return chalk.white(dedent(`
                 Dependency ${vuln.module}@${vuln.version} has a security vulnerability
@@ -107,21 +107,23 @@ export class DoTask implements ITaskAction {
                     this.done('Node Security found no dependencies with known vulnerabilities :)');
                     return;
                 }
-                securityVulnerabilities = securityVulnerabilities.filter((vuln: any) => {
+                if (ignoreList && ignoreList.length > 0) {
                     // allow ignoring of nsp check vulnerabilities with user, expiry and reason
                     // this should only be used for devDependencies, and until module fix is deployed
-                    let ignoreVuln = ignoreList.filter(i => i.module === vuln.module && i.version === vuln.version && i.expiry.getTime() >= Date.now());
-                    if (ignoreVuln.length === 0)
-                        return true;
-                    let [ignore] = ignoreVuln;
-                    let ignoreMessage = chalk.white(dedent(`
-                        ${ignore.user} has disabled security check for ${ignore.module}@${ignore.version} until ${ignore.expiry.toLocaleDateString()}
+                    securityVulnerabilities = securityVulnerabilities.filter((vuln: any) => {
+                        let ignoreVuln = ignoreList.filter(i => i.module === vuln.module && i.version === vuln.version && i.expiry.getTime() >= Date.now());
+                        if (ignoreVuln.length === 0)
+                            return true;
+                        let [ignore] = ignoreVuln;
+                        let ignoreMessage = chalk.white(dedent(`
+                            ${ignore.user} has disabled security check for ${ignore.module}@${ignore.version}
 
-                        ${ignore.reason}
-                    `));
-                    this.warn(`${ignoreMessage} ${chalk.yellow('WARNING:')} ${formatSecurityVulnerability(vuln)}`);
-                    return false;
-                });                    
+                            ${ignore.reason}
+                        `));
+                        this.warn(`${ignoreMessage}\n${chalk.yellow('WARNING:')} ${formatSecurityVulnerability(vuln)}`);
+                        return false;
+                    });
+                }
                 if (securityVulnerabilities.length > 0) {
                     let errors = securityVulnerabilities.reduce((result: string, vuln: any) => `${result}${chalk.red('ERROR:')} ${formatSecurityVulnerability(vuln)}`, '');
                     this.error(`ERROR! One of our dependencies has a known security vulnerability!\n${errors}`);

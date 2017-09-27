@@ -24,7 +24,7 @@ export interface ITaskAction {
     done(message?: string): void;
     select<T>(selector: (state: IBuildState) => T): T;  
     setState(state: IBuildState): void;
-    securityCheck(projectPath: string, ignoreList: Array<IIgnoreSecurityCheck>): void;
+    securityCheck(projectPath: string, ignoreList?: Array<IIgnoreSecurityCheck>): void;
     publishArtifact(srcPath: string, zipPath: string): void;
     copyFolder(srcPath: string, destPath: string | undefined): void;
 }
