@@ -1,7 +1,7 @@
 import { Observable } from 'rxjs/Observable';
 import { Subscriber } from 'rxjs/Subscriber';
 
-import { IBuildState, IStore } from './store';
+import { IBuildState, IBuildStore } from './build-store';
 import { IDoTask, IIgnoreSecurityCheck, ITaskAction } from './task';
 import { TaskArtifact, TaskData, TaskDataLogLevel, TaskDone, TaskError, TaskEvent, TaskStart } from './task-event';
 
@@ -16,11 +16,11 @@ const path = require('path');
 export class DoTask implements ITaskAction {
     private _startTime: Date = new Date();
 
-    constructor(private _task: IDoTask, private _observer: Subscriber<TaskEvent>, private _store: IStore) {
+    constructor(private _task: IDoTask, private _observer: Subscriber<TaskEvent>, private _store: IBuildStore) {
         this._observer.next(new TaskStart(this._task, this._startTime));
     }
 
-    static create(task: IDoTask, store: IStore): Observable<TaskEvent> {
+    static create(task: IDoTask, store: IBuildStore): Observable<TaskEvent> {
         return new Observable<TaskEvent>((observer) => {
             let action = new DoTask(task, observer, store);
             try {

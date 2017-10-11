@@ -1,6 +1,6 @@
 import { SpawnOptions } from 'child_process';
 
-import { IBuildState, IStore } from './store';
+import { IBuildState, IBuildStore } from './build-store';
 
 export interface ITaskStatusMessage {
     start?: string;
@@ -42,7 +42,7 @@ export interface IRunTask extends ITask {
     memoryLimitMb?: number;
     haltOnErrors?: boolean;
     redirectStdErr?: boolean;
-    response?: (data: string, store: IStore) => string | void;
+    response?: (data: string, store: IBuildStore) => string | void;
     eventFilter?: Array<EventFilterFunction>;
 }
 

@@ -4,7 +4,7 @@ const OS = require('os');
 import 'rxjs/add/observable/if';
 import 'rxjs/add/operator/filter';
 
-import { initialState, IBuildState, IStore, Store } from './store';
+import { initialState, IBuildState, IBuildStore, BuildStore } from './build-store';
 import { ConsoleReporter } from './console-reporter';
 import { DoTask } from './do-task';
 import { RunTask } from './run-task';
@@ -18,7 +18,7 @@ const CMD_EXT = IS_WINDOWS ? '.cmd' : '';
 
 export class Build extends TaskList {
     private constructor(
-        private _store: IStore,
+        private _store: IBuildStore,
         private _closeSubject: Subject<TaskEvent>,
         private _isSubTask: boolean
     ) {
@@ -26,7 +26,7 @@ export class Build extends TaskList {
     }
 
     static create(buildState?: IBuildState): Build {
-        let store = new Store({
+        let store = new BuildStore({
             ...initialState,
             ...buildState
         });

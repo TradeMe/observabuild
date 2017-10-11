@@ -1,3 +1,3 @@
 export * from './task';
 export * from './build';
-export { IBuildState, IStore } from './store';
+export { IBuildState, IBuildStore } from './build-store';

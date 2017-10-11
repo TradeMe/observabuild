@@ -5,10 +5,10 @@ import { Subject } from 'rxjs/Subject';
 import 'rxjs/add/observable/of';
 import 'rxjs/add/observable/using';
 import 'rxjs/add/operator/concat';
-const kill = require('tree-kill');
+import * as treeKill from 'tree-kill';
 
 import { IRunTask } from './task';
-import { IStore } from './store';
+import { IBuildStore } from './build-store';
 import { TaskData, TaskDataLogLevel, TaskDone, TaskError, TaskEvent, TaskStart } from './task-event';
 
 export class RunTask implements AnonymousSubscription {
@@ -27,7 +27,7 @@ export class RunTask implements AnonymousSubscription {
 
     constructor(
         private _task: IRunTask,
-        private _store: IStore,
+        private _store: IBuildStore,
         private _closeSubject: Subject<TaskEvent>
     ) {
         let command = this._task.command;
@@ -85,7 +85,7 @@ export class RunTask implements AnonymousSubscription {
         });
     }
 
-    static create(task: IRunTask, store: IStore, closeSubject: Subject<TaskEvent>): Observable<TaskEvent> {
+    static create(task: IRunTask, store: IBuildStore, closeSubject: Subject<TaskEvent>): Observable<TaskEvent> {
         return Observable.using(
             () => new RunTask(task, store, closeSubject),
             (resource: AnonymousSubscription) => (resource as RunTask).taskEvents$
@@ -150,7 +150,7 @@ export class RunTask implements AnonymousSubscription {
 
     private stop(signal?: string): void {
         // npm run, yarn, and at-loader will spawn their own child processes. use tree-kill to also stop these children
-        kill(this._process.pid, signal || 'SIGTERM', (err: Error) => {
+        treeKill(this._process.pid, signal || 'SIGTERM', (err: Error) => {
             // use _closeSubject since at this point the _subject is unsubscribed
             if (err) {
                 this._closeSubject.next(new TaskData(this._task, `${this._task.name} process could not be stopped (command: ${this._commandLine})`, TaskDataLogLevel.error, err));

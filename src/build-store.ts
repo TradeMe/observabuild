@@ -26,14 +26,14 @@ export const initialState = {
     success: true
 };
 
-export interface IStore {
+export interface IBuildStore {
     select<T>(selector: (state: IBuildState) => T): T;
     conditional(selector: (state: IBuildState) => boolean): boolean;
     setState(state: IBuildState): void;
 }
 
 // basic store which allows persisting state between build steps
-export class Store implements IStore {
+export class BuildStore implements IBuildStore {
     constructor(private _state: IBuildState) {}
 
     select<T>(selector: (state: IBuildState) => T): T {
