@@ -1,6 +1,6 @@
 {
   "name": "@trademe/observabuild",
-  "version": "0.1.0-beta.12",
+  "version": "0.1.0-beta.13",
   "description": "TradeMe observable build",
   "main": "./lib/index.js",
   "typings": "./lib/index.d.ts",
@@ -12,7 +12,6 @@
     "clean": "rimraf ./lib",
     "compile": "tsc",
     "example": "node ./test/example.js",
-    "example:fail": "npm run example -- --fail",
     "test:delay": "node ./test/delay.js",
     "test:error": "node ./test/throw.js"
   },
@@ -27,10 +26,10 @@
     "rimraf": "^2.6.2",
     "rxjs": "^5.4.3",
     "tree-kill": "^1.2.0",
-    "tslib": "^1.7.1"
+    "tslib": "^1.8.0"
   },
   "devDependencies": {
-    "@types/node": "^8.0.32",
+    "@types/node": "^8.0.34",
     "typescript": "2.5.3"
   },
   "repository": {

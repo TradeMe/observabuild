@@ -22,15 +22,8 @@ export interface ITaskAction {
     buildStatus(message: string): void;
     error(message: string, error?: Error): void;
     done(message?: string): void;
-    select<T>(selector: (state: IBuildState) => T): T;  
+    select<T>(selector: (state: IBuildState) => T): T;
     setState(state: IBuildState): void;
-    securityCheck(projectPath: string, ignoreList?: Array<IIgnoreSecurityCheck>): void;
-    publishArtifact(srcPath: string, zipPath: string): void;
-    copyFolder(srcPath: string, destPath: string | undefined): void;
-}
-
-export interface IDoTask extends ITask {
-    next: (task: ITaskAction) => string | void;
 }
 
 export type EventFilterFunction = (message: string) => boolean | string;
@@ -42,7 +35,7 @@ export interface IRunTask extends ITask {
     memoryLimitMb?: number;
     haltOnErrors?: boolean;
     redirectStdErr?: boolean;
-    response?: (data: string, store: IBuildStore) => string | void;
+    response?: (data: string, store: IBuildStore) => void;
     eventFilter?: Array<EventFilterFunction>;
 }
 

@@ -9,23 +9,21 @@ Stops running child processes on error.
 ### Example:
 
 ```javascript
-const { Build } = require('@trademe/observabuild');
+const { Build, log, node, parallel, step, yarn } = require('@trademe/observabuild');
 
-Build.create()
-    .parallel(tasks => {
-        tasks.yarn({ command: 'test:delay', name: 'Async One', prefix: 'Async1' });
-        tasks.node({ command: './test/delay.js', name: 'Async Two', prefix: 'Async2' });
-    })
-    .do({
-        next: (task) => {
+new Build()
+    .start(
+        parallel(
+            yarn({ command: 'test:delay', name: 'Async One', prefix: 'Async1' }),
+            node({ command: './test/delay.js', name: 'Async Two', prefix: 'Async2' })
+        ),
+        step(task => {
             task.log('starting long running task');
             if (someLongRunningTask())
                 task.done('finished long running task');
             else
                 task.error('task failed');
-        },
-        name: 'Long running task', prefix: 'Three'
-    })
-    .do({ next: (task) => `Build succeeded`)
-    .start();
+        }, { name: 'Long running task', prefix: 'Three' }),
+        log('Build succeeded')
+    );
 ```

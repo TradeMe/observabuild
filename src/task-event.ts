@@ -1,3 +1,4 @@
+import { Observable } from 'rxjs/Observable';
 import { ITask } from './task';
 
 export enum TaskDataLogLevel {
@@ -60,3 +61,5 @@ export class TaskArtifact {
 }
 
 export type TaskEvent = TaskData | TaskStart | TaskDone | TaskArtifact;
+
+export type TaskOperator = Observable<TaskEvent>;

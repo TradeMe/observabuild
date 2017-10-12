@@ -22,6 +22,7 @@ export class RunTask implements AnonymousSubscription {
     private _complete: boolean = false;
     private _unsubscribed: boolean = false;
     private _error: boolean = false;
+    private _response: string = '';
 
     private _errorTimeoutId: NodeJS.Timer | undefined;
 
@@ -72,6 +73,9 @@ export class RunTask implements AnonymousSubscription {
         });
 
         this._process.on('exit', exitCode => {
+            if (this._task.response) {
+                this._task.response(this._response, this._store);
+            }
             this._complete = true;
             if (this._error || this._unsubscribed)
                 return;
@@ -95,10 +99,8 @@ export class RunTask implements AnonymousSubscription {
     private log(message: string, logLevel?: TaskDataLogLevel): void {
         // allow task to consume or alter the stdout response stream from the child process
         if (this._task.response) {
-            let result = this._task.response(message, this._store);
-            if (typeof result !== 'string')
-                return;
-            message = result;
+            this._response += message;
+            return;
         }
 
         let filteredMessage = this.filterMessage(message);
