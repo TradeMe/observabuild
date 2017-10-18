@@ -1,6 +1,6 @@
 {
   "name": "@trademe/observabuild",
-  "version": "0.1.0-beta.13",
+  "version": "0.1.0-beta.14",
   "description": "TradeMe observable build",
   "main": "./lib/index.js",
   "typings": "./lib/index.d.ts",
@@ -16,21 +16,21 @@
     "test:error": "node ./test/throw.js"
   },
   "dependencies": {
-    "archiver": "^2.0.3",
-    "chalk": "^2.1.0",
+    "archiver": "^2.1.0",
+    "chalk": "^2.2.0",
     "dedent": "^0.7.0",
     "fs-extra": "^4.0.2",
     "log-symbols": "^2.1.0",
     "ncp": "^2.0.0",
     "nsp": "^2.8.1",
     "rimraf": "^2.6.2",
-    "rxjs": "^5.4.3",
+    "rxjs": "^5.5.0",
     "tree-kill": "^1.2.0",
     "tslib": "^1.8.0"
   },
   "devDependencies": {
-    "@types/node": "^8.0.34",
-    "typescript": "2.5.3"
+    "@types/node": "^8.0.45",
+    "typescript": "^2.5.3"
   },
   "repository": {
     "type": "git",

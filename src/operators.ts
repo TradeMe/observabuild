@@ -47,16 +47,14 @@ export const log = (message: string) => (context: IBuildContext): TaskOperator =
 export const yarn = (task: IRunTask) => (context: IBuildContext): TaskOperator => {
     let yarnTask = { ...task };
     yarnTask.command = `yarn${CMD_EXT}`;
-    yarnTask.args = task.args || [];
-    yarnTask.args.unshift(task.command);
+    yarnTask.args = [task.command, ...task.args || []];
     return run(yarnTask)(context);
 };
 
 export const node = (task: IRunTask) => (context: IBuildContext): TaskOperator => {
     let nodeTask = { ...task };
     nodeTask.command = 'node';
-    nodeTask.args = task.args || [];
-    nodeTask.args.unshift(task.command);
+    nodeTask.args = [task.command, ...task.args || []];
     return run(nodeTask)(context);
 };
 
@@ -71,16 +69,14 @@ export const nodeBin = (task: IRunTask) => (context: IBuildContext): TaskOperato
 export const npm = (task: IRunTask) => (context: IBuildContext): TaskOperator => {
     let npmTask = { ...task };
     npmTask.command = `npm${CMD_EXT}`;
-    npmTask.args = task.args || [];
-    npmTask.args.unshift(task.command);
+    npmTask.args = [task.command, ...task.args || []];
     return run(npmTask)(context);
 };
 
 export const npmRun = (task: IRunTask) => (context: IBuildContext): TaskOperator => {
     let runTask = { ...task };
     runTask.command = 'run';
-    runTask.args = task.args || [];
-    runTask.args.unshift(task.command);
+    runTask.args = [task.command, ...task.args || []];
     return npm(runTask)(context);
 };
 

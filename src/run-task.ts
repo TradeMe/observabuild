@@ -36,10 +36,8 @@ export class RunTask implements AnonymousSubscription {
         // if any of the args are functions then resolve the value now
         let args = (this._task.args || []).map(arg => typeof arg === 'function' ? this._store.select(arg) : arg);
 
-        if (this._task.memoryLimitMb) {
-            args = args || [];
+        if (this._task.memoryLimitMb)
             args.unshift(`--max-old-space-size=${this._task.memoryLimitMb}`);
-        }
 
         this._commandLine = `${command} ${args.join(' ')}`;
         this._process = spawn(command, args, this._task.options);
