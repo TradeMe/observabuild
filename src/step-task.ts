@@ -1,24 +1,31 @@
-import { Observable } from 'rxjs/Observable';
-import { Subscriber } from 'rxjs/Subscriber';
+import { Observable, Subscriber } from 'rxjs';
 
+import { IBuildContext } from './build';
 import { IBuildState, IBuildStore } from './build-store';
-import { ITask, ITaskAction } from './task';
-import { TaskArtifact, TaskData, TaskDataLogLevel, TaskDone, TaskError, TaskEvent, TaskStart } from './task-event';
+import { ITask } from './task';
+import { TaskArtifact, TaskData, TaskDataLogLevel, TaskDone, TaskError, TaskEvent, TaskOperator, TaskStart } from './task-event';
+
+export interface ITaskAction {
+    log (message: string): void;
+    artifact (path: string): void;
+    info (message: string): void;
+    warn (message: string): void;
+    buildStatus (message: string): void;
+    error (message: string, error?: Error): void;
+    done (message?: string): void;
+    select<T> (selector: (state: IBuildState) => T): T;
+    setState (state: IBuildState): void;
+}
 
 export class StepTask implements ITaskAction {
-    private _startTime: Date = new Date();
-
-    constructor(private _task: ITask, private _observer: Subscriber<TaskEvent>, private _store: IBuildStore) {
-        this._observer.next(new TaskStart(this._task, this._startTime));
-    }
-
-    static create(next: (task: ITaskAction) => string | void, task: ITask, store: IBuildStore): Observable<TaskEvent> {
-        return new Observable<TaskEvent>((observer) => {
-            let action = new StepTask(task, observer, store);
+    public static create = (next: (task: ITaskAction) => string | void, task: ITask | undefined, async: boolean) => (context: IBuildContext): TaskOperator => {
+        return new Observable<TaskEvent>((subscriber: Subscriber<TaskEvent>) => {
+            let action = new StepTask(task || {}, subscriber, context.store);
             try {
                 let result = next(action);
-                if (typeof result === 'string')
-                    action.done(result);
+                if (!async) {
+                    action.done(result || undefined);
+                }
             } catch (error) {
                 action.setState({ success: false });
                 action.error('An error occurred in step task', error);
@@ -26,43 +33,53 @@ export class StepTask implements ITaskAction {
         });
     }
 
-    log(message: string): void {
-        this._observer.next(new TaskData(this._task, message));
+    private _startTime: Date = new Date();
+
+    constructor (private _task: ITask, private _subscriber: Subscriber<TaskEvent>, private _store: IBuildStore) {
+        this._subscriber.next(new TaskStart(this._task, this._startTime));
     }
 
-    artifact(path: string): void {
-        this._observer.next(new TaskArtifact(this._task, path));
+    public log (message: string): void {
+        this._subscriber.next(new TaskData(this._task, message));
     }
 
-    info(message: string): void {
-        this._observer.next(new TaskData(this._task, message, TaskDataLogLevel.info));
+    public artifact (path: string): void {
+        this._subscriber.next(new TaskArtifact(this._task, path));
     }
 
-    warn(message: string): void {
-        this._observer.next(new TaskData(this._task, message, TaskDataLogLevel.warn));
+    public info (message: string): void {
+        this._subscriber.next(new TaskData(this._task, message, TaskDataLogLevel.info));
     }
 
-    buildStatus(message: string): void {
-        this._observer.next(new TaskData(this._task, message, TaskDataLogLevel.buildStatus));
+    public warn (message: string): void {
+        this._subscriber.next(new TaskData(this._task, message, TaskDataLogLevel.warn));
     }
 
-    error(message: string, error?: Error): void {
+    public buildStatus (message: string): void {
+        this._subscriber.next(new TaskData(this._task, message, TaskDataLogLevel.buildStatus));
+    }
+
+    public error (message: string, error?: Error): void {
         this.setState({ success: false });
-        this._observer.error(new TaskError(this._task, this._startTime, message, error));
+        this._subscriber.error(new TaskError(this._task, this._startTime, message, error));
     }
 
-    done(message?: string): void {
-        if (message && message.length > 0)
+    public done (message?: string): void {
+        if (this._subscriber.closed) {
+            return;
+        }
+        if (message && message.length > 0) {
             this.log(message);
-        this._observer.next(new TaskDone(this._task, this._startTime));
-        this._observer.complete();
+        }
+        this._subscriber.next(new TaskDone(this._task, this._startTime));
+        this._subscriber.complete();
     }
 
-    select<T>(selector: (state: IBuildState) => T): T {
+    public select<T> (selector: (state: IBuildState) => T): T {
         return this._store.select(selector);
     }
 
-    setState(state: IBuildState): void {
+    public setState (state: IBuildState): void {
         this._store.setState(state);
     }
 }

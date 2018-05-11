@@ -1,21 +1,22 @@
-import { ITask } from './task';
+import { ITask } from '../task';
+import { TaskArtifact, TaskData, TaskDataLogLevel, TaskDone, TaskError, TaskStart } from '../task-event';
 import { Reporter } from './reporter';
 import { TeamCityLogger } from './teamcity-logger';
-import { TaskArtifact, TaskData, TaskDataLogLevel, TaskDone, TaskError, TaskStart } from './task-event';
 
-export function isRunningInTeamCity(): boolean {
+export function isRunningInTeamCity (): boolean {
     return ('TEAMCITY_VERSION' in process.env);
 }
+
+/* tslint:disable:no-console */
 
 export class TeamCityReporter extends Reporter {
     private _logger: TeamCityLogger = new TeamCityLogger();
 
-    logStart(): void {
+    protected logStart (): void {
         this._logger.message('Build started');
     }
 
-    logData(event: TaskData): void {
-        // trim trailing whitespace
+    protected logData (event: TaskData): void {
         if (event.data.indexOf('##teamcity') !== -1) {
             console.log(event.data);
             return;
@@ -23,8 +24,7 @@ export class TeamCityReporter extends Reporter {
         // trim trailing whitespace
         let message = (event.data || '').replace(/[\s\r\n]+$/, '');
         message = this.addPrefix(event.task, message);
-        switch (event.logLevel)
-        {
+        switch (event.logLevel) {
             case TaskDataLogLevel.warn:
                 this._logger.warning(message, event.task.flowId);
                 break;
@@ -40,9 +40,10 @@ export class TeamCityReporter extends Reporter {
         }
     }
 
-    logTaskStart(event: TaskStart): void {
-        if (event.task.name)
+    protected logTaskStart (event: TaskStart): void {
+        if (event.task.name) {
             this._logger.progress(event.task.name);
+        }
         this.openBlock(event.task);
         if (event.task.statusMessage && event.task.statusMessage.start) {
             this._logger.message(event.task.statusMessage.start, event.task.flowId);
@@ -52,7 +53,7 @@ export class TeamCityReporter extends Reporter {
         }
     }
 
-    logTaskDone(event: TaskDone): void {
+    protected logTaskDone (event: TaskDone): void {
         if (event.task.statusMessage && event.task.statusMessage.success) {
             this._logger.message(event.task.statusMessage.success, event.task.flowId);
         } else if (event.task.name) {
@@ -61,7 +62,7 @@ export class TeamCityReporter extends Reporter {
         this.closeBlock(event.task);
     }
 
-    logError(error: TaskError, runTimeMs: number): void {
+    protected logError (error: TaskError, runTimeMs: number): void {
         let message = error.message || '';
         if (error.message.indexOf('##teamcity') !== -1) {
             console.log(error.message);
@@ -80,21 +81,7 @@ export class TeamCityReporter extends Reporter {
         this._logger.buildProblem(`${error.task.name || error.task.prefix ||  'Build'} failed`);
     }
 
-    private openBlock(task: ITask): void {
-        let blockName = task.prefix || task.name;
-        if (blockName) {
-            this._logger.blockOpened(blockName, task.name || task.prefix || '', task.flowId);
-        }
-    }
-
-    private closeBlock(task: ITask): void {
-        let blockName = task.prefix || task.name;
-        if (blockName) {
-            this._logger.blockClosed(blockName, task.flowId);
-        }
-    }
-
-    logUnhandledError(error: any): void {
+    protected logUnhandledError (error: any): void {
         if (typeof error === 'string' && error.indexOf('##teamcity') !== -1) {
             console.log(error);
             return;
@@ -102,24 +89,38 @@ export class TeamCityReporter extends Reporter {
         this._logger.error('unhandled error', error ? error.toString() : null);
     }
 
-    logArtifact(event: TaskArtifact): void {
+    protected logArtifact (event: TaskArtifact): void {
         this._logger.publishArtifacts(event.path);
     }
 
-    logComplete(runTimeMs: number): void {
+    protected logComplete (runTimeMs: number): void {
         let runTime = (runTimeMs / 1000).toFixed(2);
         this._logger.message(`Build complete in ${runTime}s`);
     }
 
-    logTimeout(message: string): void {
-        // log error
+    protected logTimeout (message: string): void {
         this._logger.error(message, null);
         this._logger.buildProblem('Build timed out');
     }
 
-    private addPrefix(task: ITask, message: string): string {
-        if (task.flowId)
+    private openBlock (task: ITask): void {
+        let blockName = task.prefix || task.name;
+        if (blockName) {
+            this._logger.blockOpened(blockName, task.name || task.prefix || '', task.flowId);
+        }
+    }
+
+    private closeBlock (task: ITask): void {
+        let blockName = task.prefix || task.name;
+        if (blockName) {
+            this._logger.blockClosed(blockName, task.flowId);
+        }
+    }
+
+    private addPrefix (task: ITask, message: string): string {
+        if (task.flowId) {
             return message; // ignore prefix if a flowId is specified as they perform the same function
+        }
         return task.prefix ? `${task.prefix}: ${message || ''}` : message;
     }
 }

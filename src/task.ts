@@ -1,7 +1,3 @@
-import { SpawnOptions } from 'child_process';
-
-import { IBuildState, IBuildStore } from './build-store';
-
 export interface ITaskStatusMessage {
     start?: string;
     success?: string;
@@ -13,36 +9,4 @@ export interface ITask {
     prefix?: string;
     statusMessage?: ITaskStatusMessage;
     flowId?: string;
-}
-
-export interface ITaskAction {
-    log(message: string): void;
-    artifact(path: string): void;
-    warn(message: string): void;
-    buildStatus(message: string): void;
-    error(message: string, error?: Error): void;
-    done(message?: string): void;
-    select<T>(selector: (state: IBuildState) => T): T;
-    setState(state: IBuildState): void;
-}
-
-export type EventFilterFunction = (message: string) => boolean | string;
-
-export interface IRunTask extends ITask {
-    command: string;
-    args?: (string | ((state: IBuildState) => string))[];
-    options?: SpawnOptions;
-    memoryLimitMb?: number;
-    haltOnErrors?: boolean;
-    redirectStdErr?: boolean;
-    response?: (data: string, store: IBuildStore) => void;
-    eventFilter?: Array<EventFilterFunction>;
-}
-
-export interface IIgnoreSecurityCheck {
-    module: string;
-    version: string;
-    expiry: Date;
-    reason: string;
-    user: string;
 }

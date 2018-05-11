@@ -1,5 +1,7 @@
-import { Observable } from 'rxjs/Observable';
+import { Observable } from 'rxjs';
 import { ITask } from './task';
+
+/* tslint:disable:max-classes-per-file */
 
 export enum TaskDataLogLevel {
     default,
@@ -10,7 +12,7 @@ export enum TaskDataLogLevel {
 }
 
 export class TaskData {
-    constructor(
+    constructor (
         public task: ITask,
         public data: string,
         public logLevel: TaskDataLogLevel = TaskDataLogLevel.default,
@@ -19,7 +21,7 @@ export class TaskData {
 }
 
 export class TaskStart {
-    constructor(
+    constructor (
         public task: ITask,
         public startTime: Date,
         public commandLine?: string
@@ -29,8 +31,8 @@ export class TaskStart {
 export class TaskDone {
     public finishTime: Date;
     public runTimeMs: number;
-    
-    constructor(
+
+    constructor (
         public task: ITask,
         startTime: Date
     ) {
@@ -42,7 +44,7 @@ export class TaskDone {
 export const ERROR_EXIT_CODE = 1;
 
 export class TaskError extends TaskDone {
-    constructor(
+    constructor (
         task: ITask,
         startTime: Date,
         public message: string,
@@ -54,7 +56,7 @@ export class TaskError extends TaskDone {
 }
 
 export class TaskArtifact {
-    constructor(
+    constructor (
         public task: ITask,
         public path: string
     ) { }

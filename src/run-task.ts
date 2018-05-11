@@ -1,20 +1,48 @@
-import { AnonymousSubscription } from 'rxjs/Subscription';
-import { ChildProcess, spawn } from 'child_process';
-import { Observable } from 'rxjs/Observable';
-import { Subject } from 'rxjs/Subject';
-import 'rxjs/add/observable/of';
-import 'rxjs/add/observable/using';
-import 'rxjs/add/operator/concat';
+import { ChildProcess, spawn, SpawnOptions } from 'child_process';
+import { concat, Observable, of, Subject, Subscriber, Subscription, Unsubscribable } from 'rxjs';
 import * as treeKill from 'tree-kill';
+import { IBuildContext } from './build';
+import { EventFilterFunction, IBuildState, IBuildStore } from './build-store';
+import { ITask } from './task';
+import { TaskData, TaskDataLogLevel, TaskDone, TaskError, TaskEvent, TaskOperator, TaskStart } from './task-event';
 
-import { IRunTask } from './task';
-import { IBuildStore } from './build-store';
-import { TaskData, TaskDataLogLevel, TaskDone, TaskError, TaskEvent, TaskStart } from './task-event';
+export interface IRunTask extends ITask {
+    command: string;
+    args?: Array<string | ((state: IBuildState) => string)>;
+    options?: SpawnOptions;
+    memoryLimitMb?: number;
+    haltOnErrors?: boolean;
+    redirectStdErr?: boolean;
+    response?: (data: string, store: IBuildStore) => void;
+    eventFilter?: Array<EventFilterFunction>;
+}
 
-export class RunTask implements AnonymousSubscription {
+export class RunTask implements Unsubscribable {
+    public static create = (task: IRunTask) => (context: IBuildContext): TaskOperator => {
+        return new Observable<TaskEvent>((subscriber: Subscriber<TaskEvent>) => {
+            try {
+                const options = {
+                    ...task,
+                    eventFilter: (task.eventFilter || []).concat(context.select(state => state.eventFilter || []))
+                };
+                const runTask = new RunTask(options, context.store, context.close$);
+                const subscription = runTask.taskEvents$.subscribe(subscriber);
+                return () => {
+                    subscription.unsubscribe();
+                    if (runTask) {
+                        runTask.unsubscribe();
+                    }
+                };
+            } catch (err) {
+                subscriber.error(err);
+                return undefined;
+            }
+        });
+    }
+
     private _process: ChildProcess;
     private _subject: Subject<TaskEvent> = new Subject<TaskEvent>();
-    public taskEvents$: Observable<TaskEvent>;
+    private taskEvents$: Observable<TaskEvent>;
 
     private _commandLine: string;
     private _startTime: Date = new Date();
@@ -26,7 +54,7 @@ export class RunTask implements AnonymousSubscription {
 
     private _errorTimeoutId: NodeJS.Timer | undefined;
 
-    constructor(
+    constructor (
         private _task: IRunTask,
         private _store: IBuildStore,
         private _closeSubject: Subject<TaskEvent>
@@ -36,15 +64,16 @@ export class RunTask implements AnonymousSubscription {
         // if any of the args are functions then resolve the value now
         let args = (this._task.args || []).map(arg => typeof arg === 'function' ? this._store.select(arg) : arg);
 
-        if (this._task.memoryLimitMb)
+        if (this._task.memoryLimitMb) {
             args.unshift(`--max-old-space-size=${this._task.memoryLimitMb}`);
+        }
 
         this._commandLine = `${command} ${args.join(' ')}`;
         this._process = spawn(command, args, this._task.options);
 
         // only emit TaskStart after subscriber attaches
-        this.taskEvents$ = Observable.of<TaskEvent>(new TaskStart(this._task, this._startTime, this._commandLine))
-            .concat(this._subject);
+        const startTask$ = of<TaskEvent>(new TaskStart(this._task, this._startTime, this._commandLine));
+        this.taskEvents$ = concat(startTask$, this._subject);
 
         this._process.stdout.on('data', (data: string | Buffer): void => {
             let stdout = data.toString();
@@ -54,11 +83,11 @@ export class RunTask implements AnonymousSubscription {
         this._process.stderr.on('data', (data: string | Buffer): void => {
             let stderr = data.toString();
 
-            if (/warning/i.test(stderr)) {
+            if (this._task.redirectStdErr === true) {
+                this.log(stderr);
+            } else if (/warning/i.test(stderr)) {
                 // if this is a warning, emit as normal
                 this.log(stderr, TaskDataLogLevel.warn);
-            } else if (this._task.redirectStdErr === true) {
-                this.log(stderr);
             } else {
                 this.error(stderr);
             }
@@ -75,8 +104,9 @@ export class RunTask implements AnonymousSubscription {
                 this._task.response(this._response, this._store);
             }
             this._complete = true;
-            if (this._error || this._unsubscribed)
+            if (this._error || this._unsubscribed) {
                 return;
+            }
             if (!exitCode || this._task.haltOnErrors === false) {
                 this._subject.next(new TaskDone(this._task, this._startTime));
                 this._subject.complete();
@@ -87,14 +117,25 @@ export class RunTask implements AnonymousSubscription {
         });
     }
 
-    static create(task: IRunTask, store: IBuildStore, closeSubject: Subject<TaskEvent>): Observable<TaskEvent> {
-        return Observable.using(
-            () => new RunTask(task, store, closeSubject),
-            (resource: AnonymousSubscription) => (resource as RunTask).taskEvents$
-        );
+    public unsubscribe (): void {
+        if (this._complete) {
+            return;
+        }
+        this._unsubscribed = true;
+        if (this._error) {
+            // if this process triggered the error then the unsubscribe will occur before the process exits.
+            // wait for a normal process exit before killing
+            setTimeout(() => {
+                if (!this._complete) {
+                    this.stop();
+                }
+            }, 1000);
+        } else {
+            this.stop();
+        }
     }
 
-    private log(message: string, logLevel?: TaskDataLogLevel): void {
+    private log (message: string, logLevel?: TaskDataLogLevel): void {
         // allow task to consume or alter the stdout response stream from the child process
         if (this._task.response) {
             this._response += message;
@@ -102,8 +143,9 @@ export class RunTask implements AnonymousSubscription {
         }
 
         let filteredMessage = this.filterMessage(message);
-        if (!filteredMessage)
+        if (!filteredMessage) {
             return;
+        }
 
         if (this._unsubscribed) {
             // if the _subject observable has been unsubscribed then we send the message
@@ -115,7 +157,7 @@ export class RunTask implements AnonymousSubscription {
         this._subject.next(new TaskData(this._task, filteredMessage, logLevel));
     }
 
-    private error(message: string): void {
+    private error (message: string): void {
         if (this._unsubscribed || this._error) {
             // if the _subject observable has been unsubscribed then we send the error
             // directly to the reporter
@@ -124,12 +166,12 @@ export class RunTask implements AnonymousSubscription {
         }
         this._subject.next(new TaskData(this._task, message, TaskDataLogLevel.error));
 
-        if (this._task.haltOnErrors === false)
+        if (this._task.haltOnErrors === false) {
             return;
-
+        }
         this._error = true;
         let stopMessage = `Stopping ${this._task.name || this._task.prefix || 'task'} due to errors`;
-        
+
         let errorTimeoutMs = this._store.select(state => state.errorTimeoutMs || 0);
         if (errorTimeoutMs === 0) {
             // error grace period disabled
@@ -139,8 +181,9 @@ export class RunTask implements AnonymousSubscription {
         }
 
         // if another error has occurred within the error grace period then reset the timer
-        if (this._errorTimeoutId)
+        if (this._errorTimeoutId) {
             clearTimeout(this._errorTimeoutId);
+        }
 
         this._errorTimeoutId = setTimeout(() => {
             this._store.setState({ success: false });
@@ -148,9 +191,9 @@ export class RunTask implements AnonymousSubscription {
         }, errorTimeoutMs);
     }
 
-    private stop(signal?: string): void {
+    private stop (signal?: string): void {
         // npm run, yarn, and at-loader will spawn their own child processes. use tree-kill to also stop these children
-        treeKill(this._process.pid, signal || 'SIGTERM', (err: Error) => {
+        treeKill(this._process.pid, signal || 'SIGTERM', (err?: Error) => {
             // use _closeSubject since at this point the _subject is unsubscribed
             if (err) {
                 this._closeSubject.next(new TaskData(this._task, `${this._task.name} process could not be stopped (command: ${this._commandLine})`, TaskDataLogLevel.error, err));
@@ -162,42 +205,28 @@ export class RunTask implements AnonymousSubscription {
         });
     }
 
-    unsubscribe(): void {
-        if (this._complete)
-            return;
-        this._unsubscribed = true;
-        if (this._error) {
-            // if this process triggered the error then the unsubscribe will occur before the process exits.
-            // wait for a normal process exit before killing
-            setTimeout(() => {
-                if (this._complete)
-                    return;
-                this.stop();
-            }, 1000);
-        } else {
-            this.stop();
-        }
-    }
-
-    private filterMessage(message: string): string | null {
-        if (!this._task.eventFilter || !this._task.eventFilter.length)
+    private filterMessage (message: string): string | null {
+        if (!this._task.eventFilter || !this._task.eventFilter.length) {
             return message;
+        }
         let filteredMessage: string | null = message;
         this._task.eventFilter.forEach(filterFunc => {
-            if (filteredMessage === null)
+            if (filteredMessage === null) {
                 return;
+            }
             let filterResult: string | boolean;
             try {
                 filterResult = filterFunc(filteredMessage);
-            } catch(error) {
+            } catch (error) {
                 // allow the task to stop the build by throwing from the event filter function
                 this.error(error instanceof Error ? error.message : error);
                 filterResult = false;
             }
-            if (!filterResult)
+            if (!filterResult) {
                 filteredMessage = null;
-            else if (typeof filterResult === 'string')
+            } else if (typeof filterResult === 'string') {
                 filteredMessage = filterResult;
+            }
         });
         return filteredMessage;
     }

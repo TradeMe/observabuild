@@ -1,100 +1,106 @@
-import { Observable } from 'rxjs/Observable';
-import 'rxjs/add/observable/concat';
-import 'rxjs/add/observable/if';
-import 'rxjs/add/observable/merge';
 import * as os from 'os';
 import * as path from 'path';
-
+import { concat, iif as _iif, merge, Observable, of } from 'rxjs';
 import { IBuildContext } from './build';
-import { TaskData, TaskEvent, TaskOperator } from './task-event';
-import { RunTask } from './run-task';
-import { StepTask } from './step-task';
-import { IIgnoreSecurityCheck, IRunTask, ITask, ITaskAction } from './task';
 import { IBuildState } from './build-store';
+import { IRunTask, RunTask } from './run-task';
+import { ITaskAction, StepTask } from './step-task';
+import { ITask } from './task';
+import { TaskData, TaskEvent, TaskOperator } from './task-event';
 
 const IS_WINDOWS = os.platform().indexOf('win32') !== -1;
 const CMD_EXT = IS_WINDOWS ? '.cmd' : '';
 
-export const serial = (...operations: ((build: IBuildContext) => TaskOperator)[]) => (context: IBuildContext): TaskOperator => {
-    return Observable.concat<TaskEvent>(...operations.map(task => task(context)));
+export const serial = (...operations: Array<(build: IBuildContext) => TaskOperator>) => (context: IBuildContext): TaskOperator => {
+    return concat<TaskEvent>(...operations.map(task => task(context)));
 };
 
-export const parallel = (...operations: ((build: IBuildContext) => TaskOperator)[]) => (context: IBuildContext): TaskOperator => {
-    return Observable.merge<TaskEvent>(...operations.map(task => task(context)));
+export const parallel = (...operations: Array<(build: IBuildContext) => TaskOperator>) => (context: IBuildContext): TaskOperator => {
+    return merge<TaskEvent>(...operations.map(task => task(context)));
 };
 
-export const step = (next: (task: ITaskAction) => string | void, task?: ITask) => (context: IBuildContext): TaskOperator => {
-    return StepTask.create(next, task || {}, context.store);
+export const step = (next: (task: ITaskAction) => string | void, task?: ITask) => {
+    return StepTask.create(next, task, false);
 };
 
-export const run = (task: IRunTask) => (context: IBuildContext): TaskOperator => {
-    let globalEventFilter = context.select(state => state.eventFilter);
-    if (globalEventFilter && globalEventFilter.length)
-        task.eventFilter = (task.eventFilter || []).concat(globalEventFilter);
-    return RunTask.create(task, context.store, context.close$);
+export const stepAsync = (next: (task: ITaskAction) => void, task?: ITask) => {
+    return StepTask.create(next, task, true);
 };
 
-export const check = (condition: (state: IBuildState) => boolean, ifTask: (context: IBuildContext) => TaskOperator, elseTask?: (context: IBuildContext) => TaskOperator) => (context: IBuildContext): TaskOperator =>  {
+export const run = (task: IRunTask) => {
+    return RunTask.create(task);
+};
+
+export const iif = (condition: (state: IBuildState) => boolean, ifTask: (context: IBuildContext) => TaskOperator, elseTask?: (context: IBuildContext) => TaskOperator) => (context: IBuildContext): TaskOperator =>  {
     return !!elseTask
-        ? Observable.if<TaskEvent, TaskEvent>(() => context.store.conditional(condition), ifTask(context), elseTask(context))
-        : Observable.if<TaskEvent, TaskEvent>(() => context.store.conditional(condition), ifTask(context));
+        ? _iif<TaskEvent, TaskEvent>(() => context.store.conditional(condition), ifTask(context), elseTask(context))
+        : _iif<TaskEvent, TaskEvent>(() => context.store.conditional(condition), ifTask(context));
 };
 
 export const log = (message: string) => (context: IBuildContext): TaskOperator => {
-    return Observable.of<TaskEvent>(new TaskData({}, message));
+    return of<TaskEvent>(new TaskData({}, message));
 };
 
-export const yarn = (task: IRunTask) => (context: IBuildContext): TaskOperator => {
+export const yarn = (task: IRunTask) => {
     let yarnTask = { ...task };
     yarnTask.command = `yarn${CMD_EXT}`;
     yarnTask.args = [task.command, ...task.args || []];
-    return run(yarnTask)(context);
+    return run(yarnTask);
 };
 
-export const node = (task: IRunTask) => (context: IBuildContext): TaskOperator => {
+export const node = (task: IRunTask) => {
     let nodeTask = { ...task };
     nodeTask.command = 'node';
     nodeTask.args = [task.command, ...task.args || []];
-    return run(nodeTask)(context);
+    return run(nodeTask);
 };
 
-export const nodeBin = (task: IRunTask) => (context: IBuildContext): TaskOperator => {
+export const nodeBin = (task: IRunTask) => {
     let command = `./node_modules/.bin/${task.command}`;
-    if (IS_WINDOWS)
+    if (IS_WINDOWS) {
         command = command.replace(/\//g, '\\') + CMD_EXT;
-    let nodeTask = { ...task, command: command };
-    return run(nodeTask)(context);
+    }
+    let nodeTask = { ...task, command };
+    return run(nodeTask);
 };
 
-export const npm = (task: IRunTask) => (context: IBuildContext): TaskOperator => {
+export const npm = (task: IRunTask) => {
     let npmTask = { ...task };
     npmTask.command = `npm${CMD_EXT}`;
     npmTask.args = [task.command, ...task.args || []];
-    return run(npmTask)(context);
+    return run(npmTask);
 };
 
-export const npmRun = (task: IRunTask) => (context: IBuildContext): TaskOperator => {
+export const npmRun = (task: IRunTask) => {
     let runTask = { ...task };
     runTask.command = 'run';
     runTask.args = [task.command, ...task.args || []];
-    return npm(runTask)(context);
+    return npm(runTask);
 };
 
-export const securityCheck = (projectPath: string, ignoreList?: Array<IIgnoreSecurityCheck>, task?: ITask) => (context: IBuildContext): TaskOperator => {
+export interface IIgnoreSecurityCheck {
+    module: string;
+    version: string;
+    expiry: Date;
+    reason: string;
+    user: string;
+}
+
+export const securityCheck = (projectPath: string, ignoreList?: Array<IIgnoreSecurityCheck>, task?: ITask) => {
     const chalk = require('chalk');
     const dedent = require('dedent');
     const nsp = require('nsp');
 
-    function formatSecurityVulnerability(vuln: any) {
+    function formatSecurityVulnerability (vuln: any) {
         return chalk.white(dedent(`
             Dependency ${vuln.module}@${vuln.version} has a security vulnerability
-            
+
             ${vuln.title}
-            
+
             ${vuln.overview}
-            
+
             ${vuln.recommendation}
-            
+
             ${chalk.yellow(`To fix this error edit ./package.json and update the "${ vuln.path[1] }" dependency to a patched version.`)}
 
             Advisory: ${vuln.advisory}
@@ -103,8 +109,8 @@ export const securityCheck = (projectPath: string, ignoreList?: Array<IIgnoreSec
             Dependency path: ${vuln.path.join(' => ')}
         `));
     }
-    
-    return step((action: ITaskAction): string | void => {
+
+    return stepAsync((action: ITaskAction) => {
         const options = {
             package: path.join(projectPath, './package.json')
         };
@@ -124,12 +130,13 @@ export const securityCheck = (projectPath: string, ignoreList?: Array<IIgnoreSec
                     // this should only be used for devDependencies, and until module fix is deployed
                     securityVulnerabilities = securityVulnerabilities.filter((vuln: any) => {
                         let ignoreVuln = ignoreList.filter(i => i.module === vuln.module && i.version === vuln.version && i.expiry.getTime() >= Date.now());
-                        if (ignoreVuln.length === 0)
+                        if (ignoreVuln.length === 0) {
                             return true;
+                        }
                         let [ignore] = ignoreVuln;
                         let ignoreMessage = chalk.white(dedent(`
                             ${ignore.user} has disabled security check for ${ignore.module}@${ignore.version}
-    
+
                             ${ignore.reason}
                         `));
                         action.warn(`${chalk.yellow('WARNING:')} ${ignoreMessage}`);
@@ -145,14 +152,14 @@ export const securityCheck = (projectPath: string, ignoreList?: Array<IIgnoreSec
                 }
             }
         });
-    }, task)(context);
+    }, task);
 };
 
-export const publishArtifact = (srcPath: string, zipPath: string, task?: ITask) => (context: IBuildContext): TaskOperator => {
+export const publishArtifact = (srcPath: string, zipPath: string, task?: ITask) => {
     const archiver = require('archiver');
     const fs = require('fs-extra');
 
-    return step((action: ITaskAction): string | void => {
+    return stepAsync((action: ITaskAction) => {
         let archive = archiver('zip');
         archive.on('error', (err: any) => {
             action.error(`Failed to create report zip file: ${zipPath}`, err);
@@ -166,14 +173,14 @@ export const publishArtifact = (srcPath: string, zipPath: string, task?: ITask) 
         archive.pipe(output);
         archive.directory(srcPath, '');
         archive.finalize();
-    }, task)(context);
+    }, task);
 };
 
-export const copyFolder = (srcPath: string, destPath: string | undefined, task?: ITask) => (context: IBuildContext): TaskOperator => {
+export const copyFolder = (srcPath: string, destPath: string | undefined, task?: ITask) => {
     const fs = require('fs-extra');
     const { ncp } = require('ncp');
-    
-    return step((action: ITaskAction): string | void => {
+
+    return stepAsync((action: ITaskAction) => {
         if (!destPath) {
             action.done('No destination path was specified so nothing was copied');
             return;
@@ -190,5 +197,5 @@ export const copyFolder = (srcPath: string, destPath: string | undefined, task?:
                 action.done(`Files were copied to ${destPath}`);
             }
         });
-    }, task)(context);
+    }, task);
 };

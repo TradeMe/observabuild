@@ -2,6 +2,10 @@
 node_modules/
 src/
 test/
-
 .DS_Store
+.gitattributes
+.gitignore
+npm-debug.log
 tsconfig.json
+tslint.json
+yarn-error.log

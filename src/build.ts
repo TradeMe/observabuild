@@ -1,28 +1,26 @@
-import { Subject } from 'rxjs/Subject';
-
-import { ConsoleReporter } from './console-reporter';
-import { initialState, IBuildState, IBuildStore, BuildStore } from './build-store';
+import { Subject } from 'rxjs';
+import { BuildStore, IBuildState, IBuildStore, initialState } from './build-store';
 import { serial } from './operators';
+import { createReporter } from './reporter';
 import { TaskEvent, TaskOperator } from './task-event';
-import { TeamCityReporter } from './teamcity-reporter';
 
 export interface IBuildContext {
-    store: IBuildStore,
-    select<T>(selector: (state: IBuildState) => T): T;  
-    setState(state: IBuildState): void;
+    store: IBuildStore;
     close$: Subject<TaskEvent>;
+    select<T> (selector: (state: IBuildState) => T): T;
+    setState (state: IBuildState): void;
 }
 
 export class Build {
     private _context: IBuildContext;
     private _store: IBuildStore;
 
-    private constructor(buildState?: IBuildState) {
+    constructor (buildState?: IBuildState) {
         this._store = new BuildStore({
             ...initialState,
             ...buildState
         });
-        this._context = <IBuildContext>{
+        this._context = <IBuildContext> {
             store: this._store,
             select: <T>(selector: (state: IBuildState) => T): T => this._store.select(selector),
             setState: (state: IBuildState): void => this._store.setState(state),
@@ -30,9 +28,8 @@ export class Build {
         };
     }
 
-    start(...operations: ((build: IBuildContext) => TaskOperator)[]): void {
-        let useTeamcity = this._store.select(state => state.teamcity);
-        let reporter = useTeamcity ? new TeamCityReporter() : new ConsoleReporter();
+    public start (...operations: Array<(context: IBuildContext) => TaskOperator>): void {
+        let reporter = createReporter(this._store.select(state => state.reporter), this._store.select(state => state.prefixLimit || 7));
 
         let timeoutSeconds = this._store.select(state => state.timeoutSeconds || 0);
         let timeoutId: NodeJS.Timer | undefined;
@@ -46,6 +43,7 @@ export class Build {
         }
 
         let tasks = serial(...operations)(this._context);
+
         // the build will start when the reporter subscribes
         reporter.subscribe(tasks, (err?: any) => {
             // on complete clear timeout if it was set. this allows main process to exit
@@ -57,7 +55,7 @@ export class Build {
         // if the main TaskEvent observable stream errors or is unsubscribed, the remaining events
         // will then be dispatched to closeSubject.
         this._context.close$.subscribe(event => reporter.next(event));
-        
+
         process.on('SIGTERM', () => {
             reporter.log('SIGTERM received. stopping build');
             reporter.unsubscribe();
