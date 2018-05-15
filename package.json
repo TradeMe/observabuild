@@ -1,6 +1,6 @@
 {
   "name": "@trademe/observabuild",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "TradeMe observable build",
   "main": "./lib/index.js",
   "typings": "./lib/index.d.ts",
@@ -20,8 +20,11 @@
     "archiver": "^2.1.1",
     "chalk": "^2.4.1",
     "dedent": "^0.7.0",
+    "elegant-spinner": "^1.0.1",
+    "figures": "^2.0.0",
     "fs-extra": "^6.0.1",
     "log-symbols": "^2.2.0",
+    "log-update": "^2.3.0",
     "ncp": "^2.0.0",
     "nsp": "^2.8.1",
     "rimraf": "^2.6.2",
@@ -30,7 +33,9 @@
     "tslib": "^1.9.0"
   },
   "devDependencies": {
+    "@types/figures": "^2.0.0",
     "@types/log-symbols": "^2.0.0",
+    "@types/log-update": "^2.0.0",
     "@types/node": "^8.10.14",
     "tslint": "^5.10.0",
     "typescript": "^2.8.3"

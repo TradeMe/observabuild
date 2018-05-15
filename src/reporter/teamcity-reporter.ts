@@ -29,7 +29,7 @@ export class TeamCityReporter extends Reporter {
                 this._logger.warning(message, event.task.flowId);
                 break;
             case TaskDataLogLevel.error:
-                let errorDetails = event.error ? event.error.toString() : null;
+                const errorDetails = event.error ? event.error.toString() : null;
                 this._logger.error(message, errorDetails, event.task.flowId);
                 break;
             case TaskDataLogLevel.buildStatus:
@@ -48,7 +48,7 @@ export class TeamCityReporter extends Reporter {
         if (event.task.statusMessage && event.task.statusMessage.start) {
             this._logger.message(event.task.statusMessage.start, event.task.flowId);
         } else if (event.task.name) {
-            let formatCommand = event.commandLine ? `: ${event.commandLine}` : '';
+            const formatCommand = event.commandLine ? `: ${event.commandLine}` : '';
             this._logger.message(this.addPrefix(event.task, `${event.task.name}${formatCommand}`), event.task.flowId);
         }
     }
@@ -63,12 +63,12 @@ export class TeamCityReporter extends Reporter {
     }
 
     protected logError (error: TaskError, runTimeMs: number): void {
-        let message = error.message || '';
+        const message = error.message || '';
         if (error.message.indexOf('##teamcity') !== -1) {
             console.log(error.message);
         } else {
             // log error
-            let errorDetails = error.error ? error.error.toString() : null;
+            const errorDetails = error.error ? error.error.toString() : null;
             this._logger.error(this.addPrefix(error.task, message), errorDetails, error.task.flowId);
             // log task fail
             if (error.task.statusMessage && error.task.statusMessage.fail) {
@@ -94,7 +94,7 @@ export class TeamCityReporter extends Reporter {
     }
 
     protected logComplete (runTimeMs: number): void {
-        let runTime = (runTimeMs / 1000).toFixed(2);
+        const runTime = (runTimeMs / 1000).toFixed(2);
         this._logger.message(`Build complete in ${runTime}s`);
     }
 
@@ -104,14 +104,14 @@ export class TeamCityReporter extends Reporter {
     }
 
     private openBlock (task: ITask): void {
-        let blockName = task.prefix || task.name;
+        const blockName = task.prefix || task.name;
         if (blockName) {
             this._logger.blockOpened(blockName, task.name || task.prefix || '', task.flowId);
         }
     }
 
     private closeBlock (task: ITask): void {
-        let blockName = task.prefix || task.name;
+        const blockName = task.prefix || task.name;
         if (blockName) {
             this._logger.blockClosed(blockName, task.flowId);
         }

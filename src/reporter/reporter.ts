@@ -65,7 +65,7 @@ export abstract class Reporter implements IReporter {
 
         if (error instanceof TaskError) {
             exitCode = error.exitCode;
-            let runTimeMs = Math.floor(Date.now() - this._startTime);
+            const runTimeMs = Math.floor(Date.now() - this._startTime);
             this.logError(error, runTimeMs);
         } else {
             exitCode = ERROR_EXIT_CODE;
@@ -76,7 +76,7 @@ export abstract class Reporter implements IReporter {
     }
 
     private complete (): void {
-        let runTimeMs = Math.floor(Date.now() - this._startTime);
+        const runTimeMs = Math.floor(Date.now() - this._startTime);
         this.logComplete(runTimeMs);
         this._notifyComplete();
     }

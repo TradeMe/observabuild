@@ -59,7 +59,12 @@ export class RunTask implements Unsubscribable {
         private _store: IBuildStore,
         private _closeSubject: Subject<TaskEvent>
     ) {
-        let command = this._task.command;
+        this._task.taskId = this._store.createTaskId();
+        if (!this._task.flowId) {
+            this._task.flowId = this._store.select(state => state.flowId);
+        }
+
+        const command = this._task.command;
 
         // if any of the args are functions then resolve the value now
         let args = (this._task.args || []).map(arg => typeof arg === 'function' ? this._store.select(arg) : arg);
@@ -68,20 +73,23 @@ export class RunTask implements Unsubscribable {
             args.unshift(`--max-old-space-size=${this._task.memoryLimitMb}`);
         }
 
+        const cwd = this._store.select(store => store.cwd);
+        const options = cwd ? { cwd, ...(this._task.options || {}) } : this._task.options;
+
         this._commandLine = `${command} ${args.join(' ')}`;
-        this._process = spawn(command, args, this._task.options);
+        this._process = spawn(command, args, options);
 
         // only emit TaskStart after subscriber attaches
         const startTask$ = of<TaskEvent>(new TaskStart(this._task, this._startTime, this._commandLine));
         this.taskEvents$ = concat(startTask$, this._subject);
 
         this._process.stdout.on('data', (data: string | Buffer): void => {
-            let stdout = data.toString();
+            const stdout = data.toString();
             this.log(stdout);
         });
 
         this._process.stderr.on('data', (data: string | Buffer): void => {
-            let stderr = data.toString();
+            const stderr = data.toString();
 
             if (this._task.redirectStdErr === true) {
                 this.log(stderr);
@@ -170,9 +178,9 @@ export class RunTask implements Unsubscribable {
             return;
         }
         this._error = true;
-        let stopMessage = `Stopping ${this._task.name || this._task.prefix || 'task'} due to errors`;
+        const stopMessage = `Stopping ${this._task.name || this._task.prefix || 'task'} due to errors`;
 
-        let errorTimeoutMs = this._store.select(state => state.errorTimeoutMs || 0);
+        const errorTimeoutMs = this._store.select(state => state.errorTimeoutMs || 0);
         if (errorTimeoutMs === 0) {
             // error grace period disabled
             this._store.setState({ success: false });
@@ -199,7 +207,7 @@ export class RunTask implements Unsubscribable {
                 this._closeSubject.next(new TaskData(this._task, `${this._task.name} process could not be stopped (command: ${this._commandLine})`, TaskDataLogLevel.error, err));
                 process.exitCode = 1;
             } else {
-                let runTimeMs = Math.floor(new Date().getTime() - this._startTime.getTime());
+                const runTimeMs = Math.floor(new Date().getTime() - this._startTime.getTime());
                 this._closeSubject.next(new TaskData(this._task, `${this._task.name} process stopped after ${runTimeMs}ms`, TaskDataLogLevel.info));
             }
         });

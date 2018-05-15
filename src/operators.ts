@@ -1,6 +1,6 @@
 import * as os from 'os';
 import * as path from 'path';
-import { concat, iif as _iif, merge, Observable, of } from 'rxjs';
+import { concat, iif as _iif, merge, Observable, of, throwError } from 'rxjs';
 import { IBuildContext } from './build';
 import { IBuildState } from './build-store';
 import { IRunTask, RunTask } from './run-task';
@@ -37,6 +37,14 @@ export const iif = (condition: (state: IBuildState) => boolean, ifTask: (context
         : _iif<TaskEvent, TaskEvent>(() => context.store.conditional(condition), ifTask(context));
 };
 
+export const requireBuild = (path: string, cwd?: string) => (context: IBuildContext): TaskOperator => {
+    const build = require(path) as (context: IBuildContext, cwd?: string) => TaskOperator;
+    if (!build) {
+        return throwError(`Child build ${path} not found`);
+    }
+    return build(context, cwd);
+};
+
 export const log = (message: string) => (context: IBuildContext): TaskOperator => {
     return of<TaskEvent>(new TaskData({}, message));
 };
@@ -60,7 +68,7 @@ export const nodeBin = (task: IRunTask) => {
     if (IS_WINDOWS) {
         command = command.replace(/\//g, '\\') + CMD_EXT;
     }
-    let nodeTask = { ...task, command };
+    const nodeTask = { ...task, command };
     return run(nodeTask);
 };
 
@@ -129,12 +137,12 @@ export const securityCheck = (projectPath: string, ignoreList?: Array<IIgnoreSec
                     // allow ignoring of nsp check vulnerabilities with user, expiry and reason
                     // this should only be used for devDependencies, and until module fix is deployed
                     securityVulnerabilities = securityVulnerabilities.filter((vuln: any) => {
-                        let ignoreVuln = ignoreList.filter(i => i.module === vuln.module && i.version === vuln.version && i.expiry.getTime() >= Date.now());
+                        const ignoreVuln = ignoreList.filter(i => i.module === vuln.module && i.version === vuln.version && i.expiry.getTime() >= Date.now());
                         if (ignoreVuln.length === 0) {
                             return true;
                         }
-                        let [ignore] = ignoreVuln;
-                        let ignoreMessage = chalk.white(dedent(`
+                        const [ignore] = ignoreVuln;
+                        const ignoreMessage = chalk.white(dedent(`
                             ${ignore.user} has disabled security check for ${ignore.module}@${ignore.version}
 
                             ${ignore.reason}
@@ -145,7 +153,7 @@ export const securityCheck = (projectPath: string, ignoreList?: Array<IIgnoreSec
                     });
                 }
                 if (securityVulnerabilities.length > 0) {
-                    let errors = securityVulnerabilities.reduce((result: string, vuln: any) => `${result}${chalk.red('ERROR:')} ${formatSecurityVulnerability(vuln)}`, '');
+                    const errors = securityVulnerabilities.reduce((result: string, vuln: any) => `${result}${chalk.red('ERROR:')} ${formatSecurityVulnerability(vuln)}`, '');
                     action.error(`ERROR! One of our dependencies has a known security vulnerability!\n${errors}`);
                 } else {
                     action.done();
@@ -160,12 +168,12 @@ export const publishArtifact = (srcPath: string, zipPath: string, task?: ITask) 
     const fs = require('fs-extra');
 
     return stepAsync((action: ITaskAction) => {
-        let archive = archiver('zip');
+        const archive = archiver('zip');
         archive.on('error', (err: any) => {
             action.error(`Failed to create report zip file: ${zipPath}`, err);
         });
         fs.ensureDirSync(path.dirname(zipPath));
-        let output = fs.createWriteStream(zipPath);
+        const output = fs.createWriteStream(zipPath);
         output.on('close', () => {
             action.artifact(zipPath);
             action.done();
@@ -186,7 +194,7 @@ export const copyFolder = (srcPath: string, destPath: string | undefined, task?:
             return;
         }
         fs.ensureDirSync(destPath);
-        let ncpOptions = {
+        const ncpOptions = {
             stopOnErr: true,
             limit: 16
         };

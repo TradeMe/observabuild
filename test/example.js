@@ -16,18 +16,18 @@ new Build({ failBuild: FAIL_BUILD })
     .start(
         step(action => 'New build !'),
         parallel(
-            yarn({ command: 'test:delay', name: 'delay one', prefix: 'One', flowId: 'tcOne' }),
+            yarn({ command: 'test:delay', name: 'Delay one', prefix: 'One', flowId: 'tcOne' }),
             serial(
-                yarn({ command: 'test:delay', name: 'delay two', statusMessage: { start: 'delay two', success: 'two succeeded', fail: 'two failed' }, prefix: 'Two', flowId: 'tcTwo' }),
-                step(action => 'task after delay', { statusMessage: { start: 'start after two', success: 'two finished' }, prefix: 'Two', flowId: 'tcTwo' })
+                yarn({ command: 'test:delay', name: 'Delay two', statusMessage: { start: 'Delay two', success: 'Delay two succeeded', fail: 'Two failed' }, prefix: 'Two', flowId: 'tcTwo' }),
+                step(action => 'task after delay', { statusMessage: { start: 'Start after two', success: 'After two succeeded' }, prefix: 'Two', flowId: 'tcTwo' })
             ),
             iif(state => !state.failBuild,
-                yarn({ command: 'test:delay', name: 'delay three', prefix: 'Three', flowId: 'tcThree' }),
-                yarn({ command: 'test:error', name: 'throw three', prefix: 'Three', flowId: 'tcThree' })
+                yarn({ command: 'test:delay', name: 'Delay three', prefix: 'Three', flowId: 'tcThree' }),
+                yarn({ command: 'test:error', name: 'Throw three', prefix: 'Three', flowId: 'tcThree' })
             )
         ),
         step(action => {
-            action.warn('this is a warning');
+            action.warn('This is a warning');
         }, { prefix: 'Warn' }),
         log('Build succeeded')
     );

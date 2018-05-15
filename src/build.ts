@@ -1,4 +1,4 @@
-import { Subject } from 'rxjs';
+import { empty, Subject } from 'rxjs';
 import { BuildStore, IBuildState, IBuildStore, initialState } from './build-store';
 import { serial } from './operators';
 import { createReporter } from './reporter';
@@ -13,12 +13,14 @@ export interface IBuildContext {
 
 export class Build {
     private _context: IBuildContext;
-    private _store: IBuildStore;
+    private _store: BuildStore;
+    private _isChildBuild: boolean;
 
-    constructor (buildState?: IBuildState) {
+    constructor (buildState?: IBuildState, parentModule?: NodeModule) {
         this._store = new BuildStore({
             ...initialState,
-            ...buildState
+            ...buildState || {},
+            ...this.getArgsState()
         });
         this._context = <IBuildContext> {
             store: this._store,
@@ -26,12 +28,38 @@ export class Build {
             setState: (state: IBuildState): void => this._store.setState(state),
             close$: new Subject<TaskEvent>()
         };
+        this._isChildBuild = false;
+        if (parentModule) {
+            const operatorsPath = require.resolve('./operators');
+            let parent: NodeModule | null = parentModule;
+            while (parent) {
+                if (parent.filename === operatorsPath) {
+                    this._isChildBuild = true;
+                    break;
+                }
+                parent = parent.parent;
+            }
+        }
     }
 
-    public start (...operations: Array<(context: IBuildContext) => TaskOperator>): void {
-        let reporter = createReporter(this._store.select(state => state.reporter), this._store.select(state => state.prefixLimit || 7));
+    public start (...operations: Array<(context: IBuildContext) => TaskOperator>): ((context: IBuildContext, cwd?: string) => TaskOperator) {
+        if (this._isChildBuild) {
+            return (context: IBuildContext, cwd?: string): TaskOperator => {
+                this._store.link(context.store);
+                const childContext = <IBuildContext> {
+                    ...this._context,
+                    close$: context.close$
+                };
+                if (cwd) {
+                    this._store.setState({ cwd });
+                }
+                return serial(...operations)(childContext);
+            };
+        }
 
-        let timeoutSeconds = this._store.select(state => state.timeoutSeconds || 0);
+        const reporter = createReporter(this._store.select(state => state.reporter), this._store.select(state => state.prefixLimit || 7));
+
+        const timeoutSeconds = this._store.select(state => state.timeoutSeconds || 0);
         let timeoutId: NodeJS.Timer | undefined;
         if (timeoutSeconds > 0) {
             timeoutId = setTimeout(() => {
@@ -42,8 +70,7 @@ export class Build {
             }, timeoutSeconds * 1000);
         }
 
-        let tasks = serial(...operations)(this._context);
-
+        const tasks = serial(...operations)(this._context);
         // the build will start when the reporter subscribes
         reporter.subscribe(tasks, (err?: any) => {
             // on complete clear timeout if it was set. this allows main process to exit
@@ -61,5 +88,18 @@ export class Build {
             reporter.unsubscribe();
             process.exitCode = 1;
         });
+
+        return (context: IBuildContext, cwd?: string) => empty();
+    }
+
+    private getArgsState (): IBuildState {
+        let argsState: IBuildState = {};
+        const args = process.argv.slice(2);
+        for (let arg of args) {
+            if (arg === '--verbose') {
+                argsState.reporter = 'console';
+            }
+        }
+        return argsState;
     }
 }

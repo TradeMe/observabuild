@@ -20,9 +20,13 @@ export interface ITaskAction {
 export class StepTask implements ITaskAction {
     public static create = (next: (task: ITaskAction) => string | void, task: ITask | undefined, async: boolean) => (context: IBuildContext): TaskOperator => {
         return new Observable<TaskEvent>((subscriber: Subscriber<TaskEvent>) => {
-            let action = new StepTask(task || {}, subscriber, context.store);
+            const stepTask = {
+                ...task || {},
+                flowId: (task ? task.flowId : undefined) || context.select(state => state.flowId)
+            };
+            const action = new StepTask(stepTask, subscriber, context.store);
             try {
-                let result = next(action);
+                const result = next(action);
                 if (!async) {
                     action.done(result || undefined);
                 }
@@ -36,6 +40,7 @@ export class StepTask implements ITaskAction {
     private _startTime: Date = new Date();
 
     constructor (private _task: ITask, private _subscriber: Subscriber<TaskEvent>, private _store: IBuildStore) {
+        this._task.taskId = this._store.createTaskId();
         this._subscriber.next(new TaskStart(this._task, this._startTime));
     }
 

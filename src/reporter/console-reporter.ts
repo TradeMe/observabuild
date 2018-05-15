@@ -20,8 +20,8 @@ export class ConsoleReporter extends Reporter {
 
     protected logData (event: TaskData): void {
         // trim trailing whitespace
-        let message = (event.data || '').replace(/[\s\r\n]+$/, '');
-        let prefix = this.addPrefix(event.task);
+        const message = (event.data || '').replace(/[\s\r\n]+$/, '');
+        const prefix = this.addPrefix(event.task);
         switch (event.logLevel) {
             case TaskDataLogLevel.info:
                 console.log(prefix, logSymbols.info, message);
@@ -48,7 +48,7 @@ export class ConsoleReporter extends Reporter {
         if (event.task.statusMessage && event.task.statusMessage.start) {
             console.log(chalk.white(`${this.addPrefix(event.task)}${event.task.statusMessage.start}`));
         } else if (event.task.name) {
-            let formatCommand = event.commandLine ? `: ${event.commandLine}` : '';
+            const formatCommand = event.commandLine ? `: ${event.commandLine}` : '';
             console.log(chalk.white(this.addPrefix(event.task, `${event.task.name}${formatCommand}`)));
         }
     }
@@ -58,7 +58,7 @@ export class ConsoleReporter extends Reporter {
             console.log(this.addPrefix(event.task), logSymbols.success, chalk.green(event.task.statusMessage.success));
         } else if (event.task.name) {
             // report run time if run was longer than 10 seconds
-            let runTime = event.runTimeMs > 10000 ? ` in ${event.runTimeMs}ms` : '';
+            const runTime = event.runTimeMs > 10000 ? ` in ${event.runTimeMs}ms` : '';
             console.log(this.addPrefix(event.task), logSymbols.success, chalk.green(`${event.task.name} completed${runTime}`));
         }
     }
@@ -84,7 +84,7 @@ export class ConsoleReporter extends Reporter {
     }
 
     protected logComplete (runTimeMs: number): void {
-        let runTime = (runTimeMs / 1000).toFixed(2);
+        const runTime = (runTimeMs / 1000).toFixed(2);
         console.log(logSymbols.success, chalk.green(`Build complete in ${runTime}s`));
     }
 
@@ -96,7 +96,7 @@ export class ConsoleReporter extends Reporter {
         if (!task.prefix) {
             return message || '';
         }
-        let prefix = `${task.prefix}:      `.substring(0, this._prefixLimit);
+        const prefix = `${task.prefix}:      `.substring(0, this._prefixLimit);
         return `${chalk.gray(prefix)}${message || ''}`;
     }
 }
