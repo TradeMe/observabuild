@@ -15,6 +15,7 @@ export interface IRunTask extends ITask {
     redirectStdErr?: boolean;
     response?: (data: string, store: IBuildStore) => void;
     eventFilter?: Array<EventFilterFunction>;
+    stopSignal?: 'SIGKILL' | 'SIGTERM' | undefined; // SIGKILL is default
 }
 
 export class RunTask implements Unsubscribable {
@@ -201,7 +202,7 @@ export class RunTask implements Unsubscribable {
 
     private stop (signal?: string): void {
         // npm run, yarn, and at-loader will spawn their own child processes. use tree-kill to also stop these children
-        treeKill(this._process.pid, signal || 'SIGTERM', (err?: Error) => {
+        treeKill(this._process.pid, signal || this._task.stopSignal || 'SIGKILL', (err?: Error) => {
             // use _closeSubject since at this point the _subject is unsubscribed
             if (err) {
                 this._closeSubject.next(new TaskData(this._task, `${this._task.name} process could not be stopped (command: ${this._commandLine})`, TaskDataLogLevel.error, err));

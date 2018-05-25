@@ -37,12 +37,15 @@ export const iif = (condition: (state: IBuildState) => boolean, ifTask: (context
         : _iif<TaskEvent, TaskEvent>(() => context.store.conditional(condition), ifTask(context));
 };
 
-export const requireBuild = (path: string, cwd?: string) => (context: IBuildContext): TaskOperator => {
-    const build = require(path) as (context: IBuildContext, cwd?: string) => TaskOperator;
-    if (!build) {
-        return throwError(`Child build ${path} not found`);
+export const requireBuild = (moduleName: string, state?: IBuildState) => (context: IBuildContext): TaskOperator => {
+    if (!path.isAbsolute(moduleName)) {
+        return throwError(`Child build path ${moduleName} must be absolute`);
     }
-    return build(context, cwd);
+    const build = require(moduleName) as (context: IBuildContext, state?: IBuildState) => TaskOperator;
+    if (!build) {
+        return throwError(`Child build ${moduleName} not found`);
+    }
+    return build(context, state);
 };
 
 export const log = (message: string) => (context: IBuildContext): TaskOperator => {

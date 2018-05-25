@@ -42,22 +42,22 @@ export class Build {
         }
     }
 
-    public start (...operations: Array<(context: IBuildContext) => TaskOperator>): ((context: IBuildContext, cwd?: string) => TaskOperator) {
+    public start (...operations: Array<(context: IBuildContext) => TaskOperator>): ((context: IBuildContext, state?: IBuildState) => TaskOperator) {
         if (this._isChildBuild) {
-            return (context: IBuildContext, cwd?: string): TaskOperator => {
+            return (context: IBuildContext, state?: IBuildState): TaskOperator => {
                 this._store.link(context.store);
                 const childContext = <IBuildContext> {
                     ...this._context,
                     close$: context.close$
                 };
-                if (cwd) {
-                    this._store.setState({ cwd });
+                if (state) {
+                    this._store.setState(state);
                 }
                 return serial(...operations)(childContext);
             };
         }
 
-        const reporter = createReporter(this._store.select(state => state.reporter), this._store.select(state => state.prefixLimit || 7));
+        const reporter = createReporter(this._store);
 
         const timeoutSeconds = this._store.select(state => state.timeoutSeconds || 0);
         let timeoutId: NodeJS.Timer | undefined;
@@ -89,15 +89,25 @@ export class Build {
             process.exitCode = 1;
         });
 
-        return (context: IBuildContext, cwd?: string) => empty();
+        return (context: IBuildContext, state?: IBuildState) => empty();
     }
 
     private getArgsState (): IBuildState {
         let argsState: IBuildState = {};
         const args = process.argv.slice(2);
-        for (let arg of args) {
+        for (const arg of args) {
             if (arg === '--verbose') {
                 argsState.reporter = 'console';
+            } else {
+                let [name, value]: Array<string | undefined | boolean> = arg.replace(/^--/, '').split(/(=|:)/);
+                if (name && name.length) {
+                    if (!value) {
+                        value = true;
+                    } else {
+                        value = value === 'true' ? true : value === 'false' ? false : value;
+                    }
+                    argsState[name.toLowerCase()] = value;
+                }
             }
         }
         return argsState;

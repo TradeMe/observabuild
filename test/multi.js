@@ -7,12 +7,7 @@ new Build({ multi: true })
         log('New multi build !'),
         parallel(
             serial(
-                step(action => action.setState({ name: 'Child One', flowId: 'tcOne' })),
-                requireBuild(path.join(__dirname, './child.js'))
-            ),
-            serial(
-                step(action => action.setState({ name: 'Child Two', flowId: 'tcOne' })),
-                requireBuild(path.join(__dirname, './child.js'))
+                requireBuild(path.join(__dirname, './child.js'), { name: 'Child One', flowId: 'tcOne' })
             )
         ),
         log('Multi build succeeded')

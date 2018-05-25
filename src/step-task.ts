@@ -45,6 +45,9 @@ export class StepTask implements ITaskAction {
     }
 
     public log (message: string): void {
+        if (!message || typeof message !== 'string') {
+            return;
+        }
         this._subscriber.next(new TaskData(this._task, message));
     }
 

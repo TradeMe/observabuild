@@ -4,6 +4,7 @@ const elegantSpinner = require('elegant-spinner');
 import * as figures from 'figures';
 import * as logSymbols from 'log-symbols';
 import * as logUpdate from 'log-update';
+import { IBuildStore } from '../build-store';
 import { ITask } from '../task';
 import { TaskArtifact, TaskData, TaskDataLogLevel, TaskDone, TaskError, TaskStart } from '../task-event';
 import { Reporter } from './reporter';
@@ -23,15 +24,15 @@ export class ProgressReporter extends Reporter {
     private _tasks: Array<IProgressTask> = [];
     private _timerId: NodeJS.Timer | undefined;
 
-    constructor (private _prefixLimit: number) {
+    constructor (private _prefixLimit: number, private _store: IBuildStore) {
         super();
         if (this._prefixLimit < 1) {
             this._prefixLimit = 1;
         }
+        this._store.setState({ interactive: true });
     }
 
     protected logStart (): void {
-        this.persistLog(chalk.white('Build started'));
         this.startUpdate();
     }
 
@@ -43,17 +44,17 @@ export class ProgressReporter extends Reporter {
         progressTask.event = event;
 
         // trim trailing whitespace
+        const prefix = this.addPrefix(event.task);
         const message = (event.data || '').replace(/[\s\r\n]+$/, '');
         switch (event.logLevel) {
             case TaskDataLogLevel.error:
-                const prefix = this.addPrefix(event.task);
                 this.persistError(prefix, logSymbols.error, chalk.red(message));
                 if (event.error) {
                     this.persistError(prefix, logSymbols.error, chalk.red(event.error.toString()));
                 }
                 break;
             case TaskDataLogLevel.buildStatus:
-                this.persistLog(chalk.green(message));
+                this.persistLog(prefix, chalk.green(message));
                 break;
         }
     }
@@ -77,10 +78,11 @@ export class ProgressReporter extends Reporter {
 
     protected logTaskDone (event: TaskDone): void {
         this._tasks = this._tasks.filter(pt => pt.taskId !== event.task.taskId);
+        const prefix = this.addPrefix(event.task);
         if (event.task.statusMessage && event.task.statusMessage.success) {
-            this.persistLog(logSymbols.success, chalk.white(event.task.statusMessage.success));
+            this.persistLog(prefix, logSymbols.success, chalk.white(event.task.statusMessage.success));
         } else if (event.task.name) {
-            this.persistLog(logSymbols.success, chalk.white(event.task.name));
+            this.persistLog(prefix, logSymbols.success, chalk.white(event.task.name));
         }
     }
 
@@ -104,7 +106,8 @@ export class ProgressReporter extends Reporter {
     }
 
     protected logArtifact (event: TaskArtifact): void {
-        this.persistLog(logSymbols.info, chalk.yellow(`Publish artifact ${event.path}`));
+        const prefix = this.addPrefix(event.task);
+        this.persistLog(prefix, logSymbols.info, chalk.yellow(`Publish artifact ${event.path}`));
     }
 
     protected logComplete (runTimeMs: number): void {
@@ -133,16 +136,15 @@ export class ProgressReporter extends Reporter {
             return;
         }
         this._updating = true;
-        let text: string = '';
+        const text: Array<string> = [];
         const spinner = this._spinner();
-        for (let progessTask of this._tasks) {
-            text += `${spinner} ${progessTask.description}\n`;
-            let data: string | undefined = progessTask.event ? this.updateData(progessTask.event) : undefined;
-            if (data) {
-                text += `${data}\n`;
+        for (let progressTask of this._tasks) {
+            text.push(`${spinner} ${progressTask.description}`);
+            if (progressTask.event) {
+                text.push(` ${this.updateData(progressTask.event)}`);
             }
         }
-        logUpdate(text);
+        logUpdate(text.join('\n'));
         this._updating = false;
     }
 
@@ -169,7 +171,7 @@ export class ProgressReporter extends Reporter {
         const data = (event.data || '').replace(/[\s\r\n]+$/, ''); // trim trailing whitespace
         const lines = data.split('\n').filter(line => line && line.trim().length > 0);
         const message = lines.length > 0 ? lines[0] : '';
-        return ` ${icon} ${color(message)}`;
+        return `${icon} ${color(message)}`;
     }
 
     private persistLog (...args: Array<any>): void {
