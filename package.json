@@ -1,6 +1,6 @@
 {
   "name": "@trademe/observabuild",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "TradeMe observable build",
   "main": "./lib/index.js",
   "typings": "./lib/index.d.ts",
@@ -37,7 +37,7 @@
     "@types/log-update": "^2.0.0",
     "@types/node": "^8.10.17",
     "tslint": "^5.10.0",
-    "typescript": "^2.8.3"
+    "typescript": "^2.8.4"
   },
   "repository": {
     "type": "git",

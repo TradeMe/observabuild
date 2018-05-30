@@ -11,9 +11,15 @@ interface IProcessNode {
 
 export function stopTask (pid: number, signal: string | undefined): Promise<void> {
     if (process.platform === 'win32') {
-        return run(`taskkill /pid ${ pid } /T /F`)
+        return run(`taskkill /PID ${ pid } /T /F`)
             .then(() => {
-                /* do not return stdout */
+                // do not return stdout from run
+            })
+            .catch((err: any) => {
+                if (err && err.code === 128) {
+                    return; // ERROR_WAIT_NO_CHILDREN. There are no child processes to wait for. (Process not found)
+                }
+                throw err;
             });
     } else {
         return ps()
