@@ -1,8 +1,8 @@
 import { ChildProcess, spawn, SpawnOptions } from 'child_process';
 import { concat, Observable, of, Subject, Subscriber, Subscription, Unsubscribable } from 'rxjs';
-import * as treeKill from 'tree-kill';
 import { IBuildContext } from './build';
 import { EventFilterFunction, IBuildState, IBuildStore } from './build-store';
+import { stopTask } from './stop-task';
 import { ITask } from './task';
 import { TaskData, TaskDataLogLevel, TaskDone, TaskError, TaskEvent, TaskOperator, TaskStart } from './task-event';
 
@@ -15,7 +15,7 @@ export interface IRunTask extends ITask {
     redirectStdErr?: boolean;
     response?: (data: string, store: IBuildStore) => void;
     eventFilter?: Array<EventFilterFunction>;
-    stopSignal?: 'SIGKILL' | 'SIGTERM' | undefined; // SIGKILL is default
+    stopSignal?: 'SIGKILL' | 'SIGTERM' | undefined; // SIGTERM is default
 }
 
 export class RunTask implements Unsubscribable {
@@ -201,17 +201,17 @@ export class RunTask implements Unsubscribable {
     }
 
     private stop (signal?: string): void {
-        // npm run, yarn, and at-loader will spawn their own child processes. use tree-kill to also stop these children
-        treeKill(this._process.pid, signal || this._task.stopSignal || 'SIGKILL', (err?: Error) => {
-            // use _closeSubject since at this point the _subject is unsubscribed
-            if (err) {
-                this._closeSubject.next(new TaskData(this._task, `${this._task.name} process could not be stopped (command: ${this._commandLine})`, TaskDataLogLevel.error, err));
-                process.exitCode = 1;
-            } else {
+        // npm run, yarn, and others will spawn their own child processes. use stopTask to also stop these children
+        // use _closeSubject since at this point the _subject is unsubscribed
+        stopTask(this._process.pid, signal || this._task.stopSignal || 'SIGTERM')
+            .then(() => {
                 const runTimeMs = Math.floor(new Date().getTime() - this._startTime.getTime());
                 this._closeSubject.next(new TaskData(this._task, `${this._task.name} process stopped after ${runTimeMs}ms`, TaskDataLogLevel.info));
-            }
-        });
+            })
+            .catch((err: any) => {
+                this._closeSubject.next(new TaskData(this._task, `${this._task.name} process could not be stopped (command: ${this._commandLine})`, TaskDataLogLevel.error, err));
+                process.exitCode = 1;
+            });
     }
 
     private filterMessage (message: string): string | null {

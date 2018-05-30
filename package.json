@@ -1,6 +1,6 @@
 {
   "name": "@trademe/observabuild",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "TradeMe observable build",
   "main": "./lib/index.js",
   "typings": "./lib/index.d.ts",
@@ -29,8 +29,7 @@
     "nsp": "^2.8.1",
     "rimraf": "^2.6.2",
     "rxjs": "^6.2.0",
-    "tree-kill": "^1.2.0",
-    "tslib": "^1.9.1"
+    "tslib": "^1.9.2"
   },
   "devDependencies": {
     "@types/figures": "^2.0.0",
